@@ -1,0 +1,110 @@
+import {
+  degreesLat,
+  degreesLong,
+  eciToGeodetic,
+  gstime,
+  json2satrec,
+  propagate,
+} from 'satellite.js';
+import type { OmmRecord, OrbitPath, PropagatedObject } from './types';
+
+const EARTH_RADIUS_KM = 6371;
+
+export function catalogId(record: OmmRecord) {
+  return Number(record.NORAD_CAT_ID);
+}
+
+export function propagateOmm(record: OmmRecord, date: Date): PropagatedObject | null {
+  try {
+    const satrec = json2satrec(record as Parameters<typeof json2satrec>[0]);
+    const state = propagate(satrec, date);
+    if (!state || !state.position || typeof state.position === 'boolean') return null;
+    const geodetic = eciToGeodetic(state.position, gstime(date));
+    const altitudeKm = geodetic.height;
+    if (!Number.isFinite(altitudeKm)) return null;
+    return {
+      catalogId: catalogId(record),
+      name: record.OBJECT_NAME,
+      epoch: record.EPOCH,
+      lat: degreesLat(geodetic.latitude),
+      lng: degreesLong(geodetic.longitude),
+      altitudeKm,
+      altitude: Math.max(0.003, altitudeKm / EARTH_RADIUS_KM),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function sampleOrbitPath(
+  record: OmmRecord,
+  center: Date,
+  color: string,
+  samples = 180,
+): OrbitPath {
+  const meanMotion = Number(record.MEAN_MOTION);
+  const periodMs = Number.isFinite(meanMotion) && meanMotion > 0 ? (86_400_000 / meanMotion) : 5_400_000;
+  const start = center.getTime() - periodMs / 2;
+  const points = Array.from({ length: samples }, (_, index) => {
+    const date = new Date(start + (index / (samples - 1)) * periodMs);
+    return propagateOmm(record, date);
+  })
+    .filter((point): point is PropagatedObject => Boolean(point))
+    .map(({ lat, lng, altitude }) => ({ lat, lng, altitude }));
+
+  return {
+    catalogId: catalogId(record),
+    name: record.OBJECT_NAME,
+    color,
+    points,
+  };
+}
+
+type Vector = { x: number; y: number; z: number };
+
+function magnitude(vector: Vector) {
+  return Math.hypot(vector.x, vector.y, vector.z);
+}
+
+function unit(vector: Vector) {
+  const length = magnitude(vector);
+  if (!length) return null;
+  return { x: vector.x / length, y: vector.y / length, z: vector.z / length };
+}
+
+function cross(a: Vector, b: Vector): Vector {
+  return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x };
+}
+
+function dot(a: Vector, b: Vector) {
+  return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+export function relativeRtnFromOmm(primary: OmmRecord, secondary: OmmRecord, date: Date) {
+  try {
+    const primaryState = propagate(json2satrec(primary as Parameters<typeof json2satrec>[0]), date);
+    const secondaryState = propagate(json2satrec(secondary as Parameters<typeof json2satrec>[0]), date);
+    if (!primaryState || !secondaryState ||
+        !primaryState.position || typeof primaryState.position === 'boolean' ||
+        !primaryState.velocity || typeof primaryState.velocity === 'boolean' ||
+        !secondaryState.position || typeof secondaryState.position === 'boolean') return null;
+    const rHat = unit(primaryState.position);
+    const nHat = unit(cross(primaryState.position, primaryState.velocity));
+    if (!rHat || !nHat) return null;
+    const tHat = unit(cross(nHat, rHat));
+    if (!tHat) return null;
+    const relative = {
+      x: secondaryState.position.x - primaryState.position.x,
+      y: secondaryState.position.y - primaryState.position.y,
+      z: secondaryState.position.z - primaryState.position.z,
+    };
+    return {
+      r: dot(relative, rHat) * 1000,
+      t: dot(relative, tHat) * 1000,
+      n: dot(relative, nHat) * 1000,
+      distanceKm: magnitude(relative),
+    };
+  } catch {
+    return null;
+  }
+}
