@@ -195,5 +195,10 @@ export type OrbitPath = {
   catalogId: number;
   name: string;
   color: string;
+  role?: 'watchlist' | 'selected-satellite' | 'paired-object' | 'cpa-link';
+  stroke?: number;
+  dashLength?: number;
+  dashGap?: number;
+  dashAnimateTime?: number;
   points: Array<{ lat: number; lng: number; altitude: number }>;
 };
