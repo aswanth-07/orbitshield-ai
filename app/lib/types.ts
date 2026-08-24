@@ -191,6 +191,71 @@ export type CdmSequence = {
   fullCdmCount: number;
 };
 
+export type T2ModelDriver = {
+  id: 'risk-state' | 'geometry' | 'uncertainty' | 'context-orbit';
+  label: string;
+  direction: 'raises-review' | 'lowers-review';
+  contributionLogOdds: number;
+  evidence: Array<{ label: string; value: number; unit?: string }>;
+};
+
+export type T2ModelReplay = {
+  schemaVersion: 1;
+  generatedAt: string;
+  source: string;
+  eventId: number;
+  cutoffDays: number;
+  reservedFromTraining: boolean;
+  selectionDisclosure: string;
+  model: {
+    id: string;
+    role: 'secondary-triage';
+    artifactSha256: string;
+    scoreType: 'uncalibrated-model-score';
+    scoreThreshold: number;
+    reviewRiskThresholdLog10: number;
+  };
+  baseline: {
+    method: 'latest-risk-persistence';
+    latestVisibleRisk: number;
+    latestVisibleProbability: number;
+    predictedFinalRisk: number;
+    decision: 'review' | 'routine';
+  };
+  inference: {
+    rawScore: number;
+    triage: 'elevated' | 'routine';
+    residualCorrectionRaw: number;
+    residualAlpha: number;
+    acceptedFinalRiskForecast: number;
+  };
+  calibration: {
+    status: 'not-calibrated';
+    interval: null;
+    displayWarning: string;
+  };
+  drivers: T2ModelDriver[];
+  evaluation: {
+    testEvents: number;
+    testPositiveEvents: number;
+    baselineF2: number;
+    baselineRecall: number;
+    modelF2: number;
+    modelRecall: number;
+    modelPrecision: number;
+    modelPrAuc: number;
+  };
+  recordedOutcome: {
+    hiddenByDefault: true;
+    finalRisk: number;
+    finalProbability: number;
+    finalClass: 'review' | 'routine';
+    baselineAbsoluteErrorLog10: number;
+    probabilityRatioToBaseline: number;
+  };
+  limitations: string[];
+};
+
 export type OrbitPath = {
   catalogId: number;
   name: string;

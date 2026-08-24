@@ -2,13 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   animateToTca,
+  animateTcaReplay,
   countDebrisBySize,
   DEBRIS_COLORS,
   isSatelliteObjectType,
   objectMarkerColor,
   orbitVisualStyle,
   SATELLITE_COLOR,
+  TCA_REPLAY_DURATION_MS,
+  TCA_REPLAY_WINDOW_MS,
   tcaAnimationFrame,
+  tcaReplayFrame,
+  tcaReplayStart,
   type AnimationScheduler,
 } from './collision-visualization';
 import type { DebrisSize, ThreatObject } from './types';
@@ -85,6 +90,28 @@ describe('collision visualization rules', () => {
 });
 
 describe('TCA animation', () => {
+  it('uses a fixed twenty-minute cinematic window when the event is farther away', () => {
+    const tca = 2_000_000;
+    expect(tcaReplayStart(0, tca)).toBe(tca - TCA_REPLAY_WINDOW_MS);
+    expect(tcaReplayStart(tca - 60_000, tca)).toBe(tca - 60_000);
+    expect(tcaReplayStart(tca + 1, tca)).toBe(tca - TCA_REPLAY_WINDOW_MS);
+  });
+
+  it('moves monotonically through follow, acquire, and encounter phases', () => {
+    const from = 0;
+    const tca = TCA_REPLAY_WINDOW_MS;
+    const follow = tcaReplayFrame(from, tca, TCA_REPLAY_DURATION_MS * 0.5);
+    const acquire = tcaReplayFrame(from, tca, TCA_REPLAY_DURATION_MS * 0.65);
+    const encounter = tcaReplayFrame(from, tca, TCA_REPLAY_DURATION_MS);
+    expect(follow.phase).toBe('follow');
+    expect(acquire.phase).toBe('acquire');
+    expect(encounter.phase).toBe('encounter');
+    expect(follow.simulationTime).toBeLessThan(acquire.simulationTime);
+    expect(acquire.simulationTime).toBeLessThan(encounter.simulationTime);
+    expect(encounter).toMatchObject({ simulationTime: tca, progress: 1, done: true });
+    expect(encounter.displayedSpeed).toBeCloseTo(184.615, 2);
+  });
+
   it('eases between the current time and TCA and completes exactly at the target', () => {
     expect(tcaAnimationFrame(1_000, 2_000, 900, 1_800)).toEqual({ value: 1_500, done: false });
     expect(tcaAnimationFrame(1_000, 2_000, 1_800, 1_800)).toEqual({ value: 2_000, done: true });
@@ -124,6 +151,28 @@ describe('TCA animation', () => {
     const onComplete = vi.fn();
     animateToTca({ from: 0, to: 100, duration: 0, scheduler, onUpdate, onComplete });
     expect(onUpdate).toHaveBeenCalledWith(100);
+    expect(onComplete).toHaveBeenCalledOnce();
+  });
+
+  it('emits replay phases and completes at TCA', () => {
+    const { scheduler, callbacks } = fakeScheduler();
+    const frames: Array<{ phase: string; simulationTime: number }> = [];
+    const onComplete = vi.fn();
+    animateTcaReplay({
+      from: 0,
+      tca: 100,
+      duration: 100,
+      scheduler,
+      onUpdate: (frame) => frames.push(frame),
+      onComplete,
+    });
+    for (const timestamp of [50, 65, 100]) {
+      const entry = [...callbacks.entries()][0];
+      callbacks.delete(entry[0]);
+      entry[1](timestamp);
+    }
+    expect(frames.map((frame) => frame.phase)).toEqual(['follow', 'acquire', 'encounter']);
+    expect(frames.at(-1)?.simulationTime).toBe(100);
     expect(onComplete).toHaveBeenCalledOnce();
   });
 });

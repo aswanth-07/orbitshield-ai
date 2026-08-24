@@ -23,7 +23,8 @@ npm run build
 
 UI changes also require browser verification at 1707x1067, 1366x768, and a
 narrow mobile viewport. Exercise the complete judge path, inspect the console,
-and confirm the cached fallback remains usable.
+confirm the cached fallback remains usable, and verify the TCA replay reaches
+the exact event time after follow, acquire, and encounter phases.
 
 ## Model checks
 
@@ -32,6 +33,7 @@ Use the repository environment instead of a global Python installation:
 ```powershell
 .\.venv-ml\Scripts\python.exe -m py_compile .\ml\train_model.py
 .\.venv-ml\Scripts\python.exe .\ml\train_model.py
+.\.venv-ml\Scripts\python.exe .\ml\export_validation_replay.py
 ```
 
 Record event counts, split sizes, baseline metrics, model metrics, runtime, and

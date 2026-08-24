@@ -69,6 +69,37 @@ export type AnimationScheduler = {
   cancel: (id: number) => void;
 };
 
+export type TcaReplayPhase = 'follow' | 'acquire' | 'encounter';
+
+export type TcaReplayFrame = {
+  simulationTime: number;
+  progress: number;
+  phase: TcaReplayPhase;
+  displayedSpeed: number;
+  done: boolean;
+};
+
+export const TCA_REPLAY_WINDOW_MS = 20 * 60_000;
+export const TCA_REPLAY_DURATION_MS = 6_500;
+
+export function tcaReplayStart(current: number, tca: number) {
+  const windowStart = tca - TCA_REPLAY_WINDOW_MS;
+  return current >= windowStart && current < tca ? current : windowStart;
+}
+
+export function tcaReplayFrame(from: number, tca: number, elapsed: number, duration = TCA_REPLAY_DURATION_MS): TcaReplayFrame {
+  const frame = tcaAnimationFrame(from, tca, elapsed, duration);
+  const total = Math.max(0, tca - from);
+  const progress = total === 0 ? 1 : Math.min(1, Math.max(0, (frame.value - from) / total));
+  return {
+    simulationTime: frame.value,
+    progress,
+    phase: progress < 0.72 ? 'follow' : progress < 0.94 ? 'acquire' : 'encounter',
+    displayedSpeed: duration <= 0 ? 0 : total / duration,
+    done: frame.done,
+  };
+}
+
 export function animateToTca({
   from,
   to,
@@ -102,6 +133,50 @@ export function animateToTca({
 
   if (duration <= 0) {
     onUpdate(to);
+    onComplete();
+  } else {
+    frameId = scheduler.request(tick);
+  }
+
+  return () => {
+    cancelled = true;
+    if (frameId !== null) scheduler.cancel(frameId);
+  };
+}
+
+export function animateTcaReplay({
+  from,
+  tca,
+  duration = TCA_REPLAY_DURATION_MS,
+  scheduler,
+  onUpdate,
+  onComplete,
+}: {
+  from: number;
+  tca: number;
+  duration?: number;
+  scheduler: AnimationScheduler;
+  onUpdate: (frame: TcaReplayFrame) => void;
+  onComplete: () => void;
+}) {
+  const startedAt = scheduler.now();
+  let frameId: number | null = null;
+  let cancelled = false;
+
+  const tick: FrameRequestCallback = (timestamp) => {
+    if (cancelled) return;
+    const frame = tcaReplayFrame(from, tca, timestamp - startedAt, duration);
+    onUpdate(frame);
+    if (frame.done) {
+      frameId = null;
+      onComplete();
+      return;
+    }
+    frameId = scheduler.request(tick);
+  };
+
+  if (duration <= 0) {
+    onUpdate(tcaReplayFrame(from, tca, duration, duration));
     onComplete();
   } else {
     frameId = scheduler.request(tick);

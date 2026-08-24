@@ -8,12 +8,13 @@ import {
   objectMarkerColor,
   orbitVisualStyle,
   SATELLITE_COLOR,
+  type TcaReplayPhase,
 } from './lib/collision-visualization';
 import { propagateOmm, sampleOrbitPath } from './lib/orbit';
 import type { ConjunctionRecord, OmmRecord, OrbitPath, PropagatedObject, ThreatObject } from './lib/types';
 import PropagationWorker from './workers/propagation.worker.ts?worker';
 
-export type OrbitCameraMode = 'global' | 'follow' | 'encounter' | 'free';
+export type OrbitCameraMode = 'global' | 'follow' | 'pair-follow' | 'encounter' | 'free';
 
 type OrbitGlobeProps = {
   catalogue: OmmRecord[];
@@ -28,6 +29,8 @@ type OrbitGlobeProps = {
   focusCatalogId: number | null;
   simulationTime: number;
   showCatalogue: boolean;
+  replayPhase: TcaReplayPhase | null;
+  replayActive: boolean;
   onObjectSelect: (catalogId: number) => void;
 };
 
@@ -104,6 +107,8 @@ export default function OrbitGlobe({
   focusCatalogId,
   simulationTime,
   showCatalogue,
+  replayPhase,
+  replayActive,
   onObjectSelect,
 }: OrbitGlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -357,6 +362,10 @@ export default function OrbitGlobe({
       markerKind: 'cpa',
     };
   }, [selectedEvent, tcaPoints]);
+  const showEncounterGeometry = Boolean(
+    selectedEvent
+    && (replayPhase === 'encounter' || Math.abs(new Date(selectedEvent.tca).getTime() - simulationTime) < 1_500),
+  );
   const tcaScenePoints = useMemo<ScenePoint[]>(() => {
     if (!selectedEvent || !reviewPair || tcaPoints.length !== 2) return [];
     return tcaPoints.map((point) => {
@@ -376,11 +385,19 @@ export default function OrbitGlobe({
     () => [
       ...interactivePoints.filter((point) => !threatIds.has(point.catalogId)),
       ...threatPoints,
-      ...tcaScenePoints,
-      ...(cpaPoint ? [cpaPoint] : []),
+      ...(showEncounterGeometry ? tcaScenePoints : []),
+      ...(showEncounterGeometry && cpaPoint ? [cpaPoint] : []),
     ],
-    [cpaPoint, interactivePoints, tcaScenePoints, threatIds, threatPoints],
+    [cpaPoint, interactivePoints, showEncounterGeometry, tcaScenePoints, threatIds, threatPoints],
   );
+  const pairLabels = useMemo(() => scenePoints.filter((point) => selectedIds.includes(point.catalogId)).map((point) => ({
+    ...point,
+    label: point.markerKind === 'debris'
+      ? `DEBRIS · ${point.name}`
+      : point.catalogId === reviewPair?.protectedCatalogId
+        ? `PROTECTED · ${point.name}`
+        : `COUNTERPART · ${point.name}`,
+  })), [reviewPair, scenePoints, selectedIds]);
 
   const orbitPathMinute = selectedEvent
     ? Math.floor(new Date(selectedEvent.tca).getTime() / 60_000)
@@ -424,14 +441,14 @@ export default function OrbitGlobe({
       ? [{ ...sampleOrbitPath(counterpartRecord, sampledAt, pairedStyle.color, 140), role: 'paired-object' as const, ...pairedStyle }]
       : [];
     const cpaStyle = orbitVisualStyle('cpa-link');
-    const cpaPath = tcaPoints.length === 2 ? [{
+    const cpaPath = showEncounterGeometry && tcaPoints.length === 2 ? [{
       catalogId: -1,
       name: 'Public-element closest approach connector',
       role: 'cpa-link' as const,
       ...cpaStyle,
       points: tcaPoints.map(({ lat, lng, altitude }) => ({ lat, lng, altitude })),
     }] : [];
-    const depthPaths = tcaPoints.map((point) => {
+    const depthPaths = showEncounterGeometry ? tcaPoints.map((point) => {
       const color = point.catalogId === reviewPair.protectedCatalogId ? SATELLITE_COLOR : reviewPair.counterpartColor;
       const style = orbitVisualStyle('depth-guide', color);
       return {
@@ -444,17 +461,17 @@ export default function OrbitGlobe({
           { lat: point.lat, lng: point.lng, altitude: point.altitude },
         ],
       };
-    });
+    }) : [];
     return [...background, ...selectedPath, ...pairedPath, ...depthPaths, ...cpaPath];
-  }, [fleetIds, focusRecords, orbitPathMinute, reviewPair, selectedEvent, selectedIds, selectedSatelliteId, tcaPoints, threats]);
+  }, [fleetIds, focusRecords, orbitPathMinute, reviewPair, selectedEvent, selectedIds, selectedSatelliteId, showEncounterGeometry, tcaPoints, threats]);
 
   useEffect(() => {
     if (!globeReady || !globeRef.current) return;
     const globe = globeRef.current;
     const controls = globe.controls();
-    controls.enableRotate = true;
-    controls.enablePan = true;
-    controls.enableZoom = true;
+    controls.enableRotate = !replayActive;
+    controls.enablePan = !replayActive;
+    controls.enableZoom = !replayActive;
     controls.screenSpacePanning = true;
     controls.zoomToCursor = true;
     controls.autoRotate = cameraMode === 'global';
@@ -465,7 +482,36 @@ export default function OrbitGlobe({
       return;
     }
 
-    if (cameraMode === 'encounter' && selectedEvent && cpaPoint) {
+    const pairPoints = scenePoints.filter((point) => selectedIds.includes(point.catalogId));
+    const protectedPoint = pairPoints.find((point) => point.catalogId === reviewPair?.protectedCatalogId);
+    const counterpartPoint = pairPoints.find((point) => point.catalogId === reviewPair?.counterpartCatalogId);
+    const pairCoordinates = protectedPoint && counterpartPoint ? [protectedPoint, counterpartPoint].map((point) => {
+      const coordinates = globe.getCoords(point.lat, point.lng, point.altitude);
+      return new THREE.Vector3(coordinates.x, coordinates.y, coordinates.z);
+    }) : [];
+
+    if ((cameraMode === 'pair-follow' || replayPhase === 'acquire') && pairCoordinates.length === 2) {
+      controls.autoRotate = false;
+      const [first, second] = pairCoordinates;
+      const angle = first.clone().normalize().angleTo(second.clone().normalize());
+      if (angle <= THREE.MathUtils.degToRad(55)) {
+        const target = first.clone().add(second).multiplyScalar(0.5);
+        const outward = target.clone().normalize();
+        const east = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), outward);
+        if (east.lengthSq() < 0.001) east.set(1, 0, 0);
+        east.normalize();
+        const separation = first.distanceTo(second);
+        const desired = target.clone().add(outward.multiplyScalar(Math.min(170, Math.max(76, 72 + separation * 1.45)))).add(east.multiplyScalar(25));
+        globe.camera().position.lerp(desired, replayActive ? 0.16 : 0.32);
+        controls.target.lerp(target, replayActive ? 0.22 : 0.45);
+        followedTargetRef.current = target;
+        controls.update();
+        positionedCameraKeyRef.current = `pair:${selectedEvent?.id ?? 'selection'}:${cameraResetKey}`;
+        return;
+      }
+    }
+
+    if ((cameraMode === 'encounter' || replayPhase === 'encounter') && selectedEvent && cpaPoint) {
       controls.autoRotate = false;
       followedTargetRef.current = null;
       const cameraKey = `encounter:${selectedEvent.id}:${cameraResetKey}`;
@@ -490,7 +536,7 @@ export default function OrbitGlobe({
 
     const point = interactivePoints.find((item) => item.catalogId === focusCatalogId)
       ?? threatPoints.find((item) => item.catalogId === focusCatalogId);
-    if (cameraMode === 'follow' && point) {
+    if ((cameraMode === 'follow' || replayPhase === 'follow') && point) {
       controls.autoRotate = false;
       const coordinates = globe.getCoords(point.lat, point.lng, point.altitude);
       const target = new THREE.Vector3(coordinates.x, coordinates.y, coordinates.z);
@@ -523,7 +569,7 @@ export default function OrbitGlobe({
     controls.autoRotate = true;
     globe.pointOfView({ lat: 18, lng: 78, altitude: 2.15 }, 700);
     positionedCameraKeyRef.current = cameraKey;
-  }, [cameraMode, cameraResetKey, cpaPoint, focusCatalogId, globeReady, interactivePoints, selectedEvent, threatPoints]);
+  }, [cameraMode, cameraResetKey, cpaPoint, focusCatalogId, globeReady, interactivePoints, replayActive, replayPhase, reviewPair, scenePoints, selectedEvent, selectedIds, threatPoints]);
 
   return (
     <div className="globe-host" ref={containerRef} data-camera-mode={cameraMode} aria-label="Interactive SGP4-propagated Earth globe">
@@ -551,6 +597,15 @@ export default function OrbitGlobe({
           const item = point as ScenePoint;
           if (item.selectable) onObjectSelect(item.catalogId);
         }}
+        labelsData={pairLabels}
+        labelLat="lat"
+        labelLng="lng"
+        labelAltitude={(point: object) => (point as ScenePoint).altitude + 0.045}
+        labelText="label"
+        labelSize={0.72}
+        labelColor={(point: object) => (point as ScenePoint).color}
+        labelDotRadius={0}
+        labelResolution={3}
         pathsData={paths}
         pathPoints="points"
         pathPointLat="lat"

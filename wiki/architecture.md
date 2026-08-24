@@ -32,10 +32,16 @@ keeps events separate across train, validation, and test partitions. Event
 9051 remains reserved for the judge replay.
 
 Latest-risk persistence is the safety baseline. The current LightGBM model
-provides a secondary high-risk triage signal. A compact residual neural
-challenger can replace it only after event-held-out validation shows a measured
-benefit. The UI identifies the model version, cutoff, input coverage, baseline,
-output, uncertainty status, and recorded outcome.
+provides a secondary high-risk triage signal. A neural challenger was not
+adopted because it did not improve held-out validation. The UI identifies the
+model version, cutoff, input coverage, baseline, raw score, calibration limit,
+grouped evidence, and recorded outcome.
+
+The accelerated TCA replay uses a fixed twenty-minute window and a 6.5-second
+presentation duration. Camera phases follow the protected object, acquire the
+pair, and then frame the encounter. At Earth scale the pair is necessarily
+nearly coincident, so the final debris view is a labelled magnified schematic
+using the authoritative SOCRATES miss range rather than fabricated geometry.
 
 ## Offline behavior
 

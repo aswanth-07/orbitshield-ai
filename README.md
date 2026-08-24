@@ -1,17 +1,13 @@
 # OrbitShield AI
 
-OrbitShield is an interactive 3D orbital-traffic and conjunction-risk explorer built for the Space Technology theme.
+OrbitShield is an AI-assisted conjunction-triage workspace for small satellite teams. It turns public screening traffic into one explainable review, follows the protected satellite and debris to closest approach, then demonstrates a trained T−2 triage model on a held-out ESA event.
 
-The current interface includes:
+The hackathon demonstration has two evidence lanes:
 
-- live CelesTrak catalogue context and SOCRATES conjunction metrics;
-- bright-green satellite markers and size-coded debris markers;
-- persistent watchlist orbits and focused satellite/debris encounter paths;
-- **Follow**, **Encounter**, **Free 3D**, and **Reset** camera modes with rotate, pan, zoom-to-cursor, and touch controls;
-- a collision-candidate workflow that isolates one pair, moves to TCA, and marks the public-element closest-approach approximation; and
-- an oblique R-T-N depth inset with a separately magnified normal axis so out-of-plane separation remains readable.
+- **Public screening:** CelesTrak OMM context, SOCRATES metrics, transparent Review/Watch/Low rules, and a debris-focused India Earth Observation fleet workflow.
+- **Historical AI replay:** nine ESA CDMs visible through a strict T−2 cutoff, a latest-risk persistence baseline, a trained LightGBM priority signal, grouped evidence, and a recorded-outcome reveal.
 
-SOCRATES values remain the authoritative public conjunction metrics shown by the UI. The plotted orbit geometry and closest-approach position are contextual approximations based on public orbital elements and are not operational manoeuvre guidance.
+The 3D globe uses SGP4-propagated public elements for context. The accelerated follow compresses a 20-minute encounter window into 6.5 seconds and finishes with a clearly labelled magnified schematic. SOCRATES values remain authoritative; conflicting public-element R–T–N geometry is hidden rather than presented as exact.
 
 ## Run locally
 
@@ -25,7 +21,9 @@ Open `http://localhost:3000/`.
 ## Validate
 
 ```powershell
+npm test
+npm run lint
 npm run build
 ```
 
-This is an educational and preliminary-screening interface, not an operational collision warning or manoeuvre recommendation system.
+The model output is a raw triage score, not collision probability. OrbitShield is preliminary decision support: it does not confirm collisions, recommend manoeuvres, or replace a qualified flight-dynamics analyst.

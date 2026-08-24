@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-24T16:02:49.562539Z",
+  "source": "https://zenodo.org/records/4463683",
+  "eventId": 9051,
+  "cutoffDays": 2.0,
+  "reservedFromTraining": true,
+  "selectionDisclosure": "A held-out demonstration case selected for clear risk evolution.",
+  "model": {
+    "id": "orbitshield-lightgbm-t2-v1",
+    "role": "secondary-triage",
+    "artifactSha256": "A6C758B001718AAAD4B182798146CB037DD7EAED0CF5724D58384892690B734C",
+    "scoreType": "uncalibrated-model-score",
+    "scoreThreshold": 0.34,
+    "reviewRiskThresholdLog10": -6.0
+  },
+  "baseline": {
+    "method": "latest-risk-persistence",
+    "latestVisibleRisk": -4.4565528199183,
+    "latestVisibleProbability": 3.495e-05,
+    "predictedFinalRisk": -4.4565528199183,
+    "decision": "review"
+  },
+  "inference": {
+    "rawScore": 0.9119092069524483,
+    "triage": "elevated",
+    "residualCorrectionRaw": 0.6170109827941996,
+    "residualAlpha": 0.0,
+    "acceptedFinalRiskForecast": -4.4565528199183
+  },
+  "calibration": {
+    "status": "not-calibrated",
+    "interval": null,
+    "displayWarning": "Raw triage score, not collision probability."
+  },
+  "drivers": [
+    {
+      "id": "risk-state",
+      "label": "Risk state",
+      "direction": "raises-review",
+      "contributionLogOdds": 8.29589990763161,
+      "evidence": [
+        {
+          "label": "Latest visible log10 risk",
+          "value": -4.4565528199183
+        },
+        {
+          "label": "Maximum visible log10 risk",
+          "value": -4.4565528199183
+        },
+        {
+          "label": "Latest maximum-risk estimate",
+          "value": -3.191383964573008
+        }
+      ]
+    },
+    {
+      "id": "uncertainty",
+      "label": "Uncertainty evidence",
+      "direction": "raises-review",
+      "contributionLogOdds": 0.9753567820983156,
+      "evidence": [
+        {
+          "label": "Target observations used",
+          "value": 314.0
+        },
+        {
+          "label": "Counterpart observations used",
+          "value": 25.0
+        }
+      ]
+    },
+    {
+      "id": "geometry",
+      "label": "Close geometry",
+      "direction": "raises-review",
+      "contributionLogOdds": 0.7810191780038083,
+      "evidence": [
+        {
+          "label": "Latest miss distance",
+          "value": 67.0,
+          "unit": "m"
+        },
+        {
+          "label": "Minimum visible miss distance",
+          "value": 67.0,
+          "unit": "m"
+        }
+      ]
+    },
+    {
+      "id": "context-orbit",
+      "label": "Orbit context",
+      "direction": "lowers-review",
+      "contributionLogOdds": -0.25559960397852227,
+      "evidence": [
+        {
+          "label": "Visible CDMs",
+          "value": 9.0
+        },
+        {
+          "label": "Latest time to TCA",
+          "value": 2.1022667824074075,
+          "unit": "days"
+        }
+      ]
+    }
+  ],
+  "evaluation": {
+    "testEvents": 1792,
+    "testPositiveEvents": 48,
+    "baselineF2": 0.8424908424908425,
+    "baselineRecall": 0.9583333333333334,
+    "modelF2": 0.8269230769230769,
+    "modelRecall": 0.8958333333333334,
+    "modelPrecision": 0.6323529411764706,
+    "modelPrAuc": 0.8556202166405111
+  },
+  "recordedOutcome": {
+    "hiddenByDefault": true,
+    "finalRisk": -3.753994095923971,
+    "finalProbability": 0.00017619999999999995,
+    "finalClass": "review",
+    "baselineAbsoluteErrorLog10": 0.7025587239943287,
+    "probabilityRatioToBaseline": 5.0414878397711
+  },
+  "limitations": [
+    "The model score is not calibrated as a collision probability.",
+    "The model supports triage and does not replace the persistence baseline or an analyst.",
+    "The demonstration event is held out from training but selected for clear risk evolution."
+  ]
+}

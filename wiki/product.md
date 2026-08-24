@@ -15,15 +15,16 @@ escalation workflow.
 
 1. The opening globe shows current orbital context and one primary action for
    the India Earth Observation fleet.
-2. Fleet analysis opens the highest screening priority and hides unrelated
-   traffic.
+2. Fleet analysis opens the highest-ranked debris encounter and hides
+   unrelated traffic.
 3. Accelerated TCA follow keeps the selected satellite and counterpart visible
    while time advances to closest approach.
 4. The event brief presents TCA, miss range, relative speed, maximum
    probability, priority reasons, and safe review steps.
 5. The AI replay shows a held-out ESA event using only CDMs available at least
-   two days before TCA. It compares the latest-risk baseline with model
-   evidence, exposes uncertainty, and reveals the recorded outcome on request.
+   two days before TCA. It compares the latest-risk baseline with the trained
+   triage signal, explains the grouped model evidence, and reveals the recorded
+   outcome on request.
 
 ## Customer and value
 

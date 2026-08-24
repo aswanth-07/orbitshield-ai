@@ -16,3 +16,14 @@ Run from the repository root:
 ```
 
 Generated models and metrics are written to `ml/artifacts/` and are intentionally not committed.
+
+Export the real held-out judge replay after training:
+
+```powershell
+.\.venv-ml\Scripts\python.exe .\ml\export_validation_replay.py
+```
+
+The exporter verifies that event `9051` stayed outside every model partition,
+runs the saved model, and writes a small source-labelled result to
+`app/data/esa-validation-replay.json`. The frontend labels the classifier output
+as an uncalibrated triage score rather than a collision probability.

@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import snapshot from '../data/active-catalog.snapshot.json';
+import replayFixture from '../data/esa-validation-replay.json';
 import { debrisSizeFromRcs, getCatalog, normalizeOmm, parseSocratesCsv } from './server-data';
 import { propagateOmm } from './orbit';
 import { propagateCatalogue } from '../workers/propagation.worker';
-import type { OmmRecord } from './types';
+import type { OmmRecord, T2ModelReplay } from './types';
+
+const replay = replayFixture as T2ModelReplay;
 
 describe('data normalization and propagation', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -53,5 +56,15 @@ describe('data normalization and propagation', () => {
     expect(response.status).toBe('cached');
     expect(response.objects).toHaveLength(1);
     expect(response.message).toContain('offline snapshot');
+  });
+
+  it('ships a held-out T−2 replay whose score is explicitly not a probability', () => {
+    expect(replay.eventId).toBe(9051);
+    expect(replay.cutoffDays).toBe(2);
+    expect(replay.inference.rawScore).toBeGreaterThan(replay.model.scoreThreshold);
+    expect(replay.inference.triage).toBe('elevated');
+    expect(replay.calibration.displayWarning.toLowerCase()).toContain('not collision probability');
+    expect(replay.inference.residualAlpha).toBe(0);
+    expect(replay.recordedOutcome.probabilityRatioToBaseline).toBeGreaterThan(1);
   });
 });
