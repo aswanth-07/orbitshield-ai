@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import {
   AlertTriangle, Check, ChevronDown, Crosshair, Database, Eye, EyeOff, Layers3,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, Pause, Play, Plus, RotateCcw,
@@ -14,7 +15,10 @@ import { explainConjunction } from './lib/explanations';
 import { INDIA_EO_FLEET } from './lib/fleet';
 import { relativeRtnFromOmm } from './lib/orbit';
 import { comparePriority, formatProbability } from './lib/screening';
-import type { CatalogResponse, CdmSequence, ConjunctionRecord, ConjunctionResponse, DataStatus, OmmRecord, ScreeningPriority } from './lib/types';
+import type {
+  CatalogResponse, CdmSequence, ConjunctionRecord, ConjunctionResponse, DataStatus,
+  DebrisSize, OmmRecord, SatelliteMedia, ScreeningPriority, ThreatObject, ThreatResponse,
+} from './lib/types';
 
 const OrbitGlobe = dynamic(() => import('./orbit-globe'), {
   ssr: false,
@@ -27,6 +31,8 @@ type SortMode = 'priority' | 'tca' | 'probability' | 'range';
 const validation = cdmFixture as CdmSequence;
 const defaultWatchlist = INDIA_EO_FLEET.objects.map((item) => item.catalogId);
 const priorityLabels: Record<ScreeningPriority, string> = { review: 'Review', watch: 'Watch', low: 'Low', 'needs-data': 'Needs data' };
+const debrisColors: Record<DebrisSize, string> = { small: '#a979ff', medium: '#ffae45', large: '#ff5e5e', unknown: '#9aa7b0' };
+const debrisLabels: Record<DebrisSize, string> = { small: 'Small <0.1 m²', medium: 'Medium 0.1–1 m²', large: 'Large >1 m²', unknown: 'Size unknown' };
 
 function dataLabel(status?: DataStatus) {
   if (status === 'current') return 'Current';
@@ -84,14 +90,76 @@ function SourceStatus({ status, title, detail }: { status?: DataStatus; title: s
   return <div className="source-status"><i className={statusTone(status)} /><span><strong>{title}</strong><small>{detail}</small></span></div>;
 }
 
+function SatelliteProfile({
+  catalogId,
+  name,
+  record,
+  threat,
+  risks,
+  threatsById,
+  media,
+  mediaLoading,
+  clock,
+  onSelectEvent,
+}: {
+  catalogId: number;
+  name: string;
+  record?: OmmRecord;
+  threat?: ThreatObject;
+  risks: ConjunctionRecord[];
+  threatsById: Map<number, ThreatObject>;
+  media: SatelliteMedia | null;
+  mediaLoading: boolean;
+  clock: number;
+  onSelectEvent: (event: ConjunctionRecord) => void;
+}) {
+  return <>
+    <div className="inspector-kicker"><span>Satellite profile</span><span className={`priority-pill ${risks.some((event) => event.priority === 'review') ? 'review' : risks.length ? 'watch' : 'low'}`}>{risks.length} possible risk{risks.length === 1 ? '' : 's'}</span></div>
+    <h1>{name}</h1>
+    <div className="pair-line"><span>NORAD {catalogId}</span><i /><span>{threat?.objectType ?? record?.OBJECT_TYPE ?? 'Active payload'}</span></div>
+    <div className="satellite-media">
+      {mediaLoading ? <div className="media-placeholder"><span className="media-spinner" />Searching verified public media…</div> : media?.status === 'available' && media.imageUrl ? <>
+        <Image src={media.imageUrl} alt={media.description || `${name} satellite`} fill sizes="(max-width: 1100px) 330px, 350px" unoptimized />
+        <div className="media-caption"><strong>{media.title}</strong><span>{media.license}{media.author ? ` · ${media.author}` : ''}</span>{media.pageUrl ? <a href={media.pageUrl} target="_blank" rel="noreferrer">Open source ↗</a> : null}</div>
+      </> : <div className="media-placeholder"><Satellite size={28} /><strong>No verified public image found</strong><span>The orbital record is still available; no mission image is fabricated.</span></div>}
+    </div>
+    <div className="metric-grid satellite-metrics">
+      <div><span>Orbit epoch</span><strong>{dateUtc(record?.EPOCH ?? null)}</strong></div>
+      <div><span>Owner / country</span><strong>{threat?.owner || record?.COUNTRY_CODE || 'Not provided'}</strong></div>
+      <div><span>Object class</span><strong>{threat?.objectType ?? record?.OBJECT_TYPE ?? 'Payload'}</strong></div>
+      <div><span>Radar cross section</span><strong>{threat?.rcs === null || threat?.rcs === undefined ? 'Not published' : `${threat.rcs.toFixed(4)} m²`}</strong></div>
+    </div>
+    {threat ? <div className="selected-size"><i style={{ background: debrisColors[threat.size] }} /><span>{debrisLabels[threat.size]}</span><b>{threat.eventCount} screening event{threat.eventCount === 1 ? '' : 's'}</b></div> : null}
+    <section className="risk-panel">
+      <div className="section-head"><span>All possible collision risks</span><b>{risks.length ? 'SOCRATES screened' : 'No match'}</b></div>
+      {risks.length ? <div className="satellite-risk-list">{risks.map((event) => {
+        const otherId = event.primaryCatalogId === catalogId ? event.secondaryCatalogId : event.primaryCatalogId;
+        const otherName = cleanName(event.primaryCatalogId === catalogId ? event.secondaryName : event.primaryName);
+        const debris = threatsById.get(otherId) ?? threat;
+        const size = debris?.size ?? 'unknown';
+        return <button key={event.id} onClick={() => onSelectEvent(event)} aria-label={`Inspect risk with ${otherName}`}>
+          <i style={{ background: debrisColors[size] }} />
+          <span><strong>{otherName}</strong><small>{debrisLabels[size]} · NORAD {otherId}</small></span>
+          <span className="risk-values"><b>{event.rangeKm?.toFixed(2) ?? '—'} km</b><small>{formatProbability(event.maximumProbability)}</small><em>{countdown(event.tca, clock)}</em></span>
+        </button>;
+      })}</div> : <div className="risk-empty"><ShieldCheck size={20} /><strong>No fleet-screening match</strong><p>This object has no event in the current India EO SOCRATES view. That is not a guarantee of zero collision risk.</p></div>}
+    </section>
+    <details><summary>Data provenance & limits <ChevronDown size={13} /></summary><p>Orbit position uses public CelesTrak GP elements. Risk metrics use the current public SOCRATES screening run. RCS is a radar cross-section band, not a guaranteed physical dimension.</p></details>
+  </>;
+}
+
 export default function OrbitScene() {
   const [mode, setMode] = useState<ViewMode>('screening');
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [conjunctions, setConjunctions] = useState<ConjunctionResponse | null>(null);
+  const [threats, setThreats] = useState<ThreatResponse | null>(null);
   const [extraRecords, setExtraRecords] = useState<OmmRecord[]>([]);
   const [fleetActive, setFleetActive] = useState(false);
   const [watchlist, setWatchlist] = useState<number[]>(defaultWatchlist);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedSatelliteId, setSelectedSatelliteId] = useState<number | null>(null);
+  const [satelliteMedia, setSatelliteMedia] = useState<SatelliteMedia | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(false);
   const [previewId, setPreviewId] = useState<number | null>(null);
   const [focusCatalogId, setFocusCatalogId] = useState<number | null>(null);
   const [query, setQuery] = useState('');
@@ -158,6 +226,11 @@ export default function OrbitScene() {
       setCatalog({ status: 'unavailable', source: 'Catalogue unavailable', sourceUpdatedAt: null, fetchedAt: new Date().toISOString(), count: 0, objects: [] });
       setConjunctions(null);
     });
+    fetch('/api/threats').then((response) => response.json() as Promise<ThreatResponse>).then((threatResponse) => {
+      if (active) setThreats(threatResponse);
+    }).catch(() => {
+      if (active) setThreats(null);
+    });
     return () => { active = false; };
   }, []);
 
@@ -174,9 +247,14 @@ export default function OrbitScene() {
   const recordMap = useMemo(() => {
     const map = new Map<number, OmmRecord>();
     catalog?.objects.forEach((record) => map.set(Number(record.NORAD_CAT_ID), record));
+    threats?.objects.forEach((threat) => {
+      if (threat.record) map.set(threat.catalogId, threat.record);
+    });
     extraRecords.forEach((record) => map.set(Number(record.NORAD_CAT_ID), record));
     return map;
-  }, [catalog, extraRecords]);
+  }, [catalog, extraRecords, threats]);
+
+  const threatsById = useMemo(() => new Map((threats?.objects ?? []).map((threat) => [threat.catalogId, threat])), [threats]);
 
   const sortedEvents = useMemo(() => {
     const events = [...(conjunctions?.events ?? [])].filter((event) => filters.has(event.priority));
@@ -190,6 +268,15 @@ export default function OrbitScene() {
   }, [conjunctions, filters, sortMode]);
 
   const selectedEvent = useMemo(() => conjunctions?.events.find((event) => event.id === selectedEventId) ?? null, [conjunctions, selectedEventId]);
+  const selectedThreat = selectedSatelliteId ? threatsById.get(selectedSatelliteId) : undefined;
+  const selectedSatellite = selectedSatelliteId ? recordMap.get(selectedSatelliteId) : undefined;
+  const selectedSatelliteName = selectedSatellite?.OBJECT_NAME ?? selectedThreat?.name ?? null;
+  const selectedSatelliteRisks = useMemo(() => {
+    if (!selectedSatelliteId) return [];
+    return [...(conjunctions?.events ?? [])]
+      .filter((event) => event.primaryCatalogId === selectedSatelliteId || event.secondaryCatalogId === selectedSatelliteId)
+      .sort(comparePriority);
+  }, [conjunctions, selectedSatelliteId]);
   const searchResults = useMemo(() => {
     const normalized = query.trim().toUpperCase();
     if (normalized.length < 2 || !catalog) return [];
@@ -205,19 +292,45 @@ export default function OrbitScene() {
     [selectedEvent],
   );
   const focusRecords = useMemo(() => {
-    const ids = new Set([...watchlist, ...selectedIds, ...(previewId ? [previewId] : [])]);
+    const ids = new Set([...watchlist, ...selectedIds, ...(previewId ? [previewId] : []), ...(selectedSatelliteId ? [selectedSatelliteId] : [])]);
     return [...ids].flatMap((id) => recordMap.get(id) ?? []);
-  }, [previewId, recordMap, selectedIds, watchlist]);
+  }, [previewId, recordMap, selectedIds, selectedSatelliteId, watchlist]);
+
+  const debrisCounts = useMemo(() => {
+    const counts: Record<DebrisSize, number> = { small: 0, medium: 0, large: 0, unknown: 0 };
+    threats?.objects.forEach((threat) => { counts[threat.size] += 1; });
+    return counts;
+  }, [threats]);
 
   const explanation = selectedEvent ? explainConjunction(selectedEvent) : null;
   const selectedPrimary = selectedEvent ? recordMap.get(selectedEvent.primaryCatalogId) : undefined;
   const selectedSecondary = selectedEvent ? recordMap.get(selectedEvent.secondaryCatalogId) : undefined;
   const baseline = validation.visibleCdms.at(-1)!;
 
+  useEffect(() => {
+    if (!selectedSatelliteId || !selectedSatelliteName) return;
+    const controller = new AbortController();
+    const params = new URLSearchParams({ catnr: String(selectedSatelliteId), name: selectedSatelliteName });
+    fetch(`/api/object-image?${params}`, { signal: controller.signal })
+      .then((response) => response.json() as Promise<SatelliteMedia>)
+      .then((media) => setSatelliteMedia(media))
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          setSatelliteMedia({ status: 'unavailable', source: 'Wikimedia Commons', message: 'Media search failed.' });
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setMediaLoading(false);
+      });
+    return () => controller.abort();
+  }, [selectedSatelliteId, selectedSatelliteName]);
+
   async function selectEvent(event: ConjunctionRecord) {
     setSelectedEventId(event.id);
     setInspectorOpen(true);
-    setFocusCatalogId(event.primaryCatalogId);
+    const protectedCatalogId = defaultWatchlist.includes(event.primaryCatalogId) ? event.primaryCatalogId : event.secondaryCatalogId;
+    setSelectedSatelliteId(protectedCatalogId);
+    setFocusCatalogId(protectedCatalogId);
     try {
       const ids = [event.primaryCatalogId, event.secondaryCatalogId];
       const response = await fetch(`/api/catalog?catnr=${ids.join(',')}`).then((result) => result.json() as Promise<CatalogResponse>);
@@ -227,6 +340,19 @@ export default function OrbitScene() {
         return [...merged.values()];
       });
     } catch { /* preserve event details; geometry may remain unavailable */ }
+  }
+
+  function selectSatellite(catalogId: number) {
+    if (catalogId !== selectedSatelliteId) {
+      setSatelliteMedia(null);
+      setMediaLoading(true);
+    }
+    setSelectedSatelliteId(catalogId);
+    setSelectedEventId(null);
+    setPreviewId(catalogId);
+    setFocusCatalogId(catalogId);
+    setInspectorOpen(true);
+    setMode('screening');
   }
 
   function activateFleet() {
@@ -239,8 +365,7 @@ export default function OrbitScene() {
 
   function preview(record: OmmRecord) {
     const id = Number(record.NORAD_CAT_ID);
-    setPreviewId(id);
-    setFocusCatalogId(id);
+    selectSatellite(id);
     setSearchOpen(false);
   }
 
@@ -285,7 +410,7 @@ export default function OrbitScene() {
             {previewId && <div className="preview-card"><span>Search preview</span><strong>{recordMap.get(previewId)?.OBJECT_NAME ?? `NORAD ${previewId}`}</strong><button onClick={() => setWatchlist((current) => current.includes(previewId) ? current : [...current, previewId])} disabled={watchlist.includes(previewId)}>{watchlist.includes(previewId) ? <><Check size={12} /> In watchlist</> : <><Plus size={12} /> Add to watchlist</>}</button></div>}
             <div className="queue-tools"><div className="filter-row">{(['review', 'watch', 'low'] as ScreeningPriority[]).map((priority) => <button key={priority} className={`${priority} ${filters.has(priority) ? 'active' : ''}`} onClick={() => toggleFilter(priority)} aria-pressed={filters.has(priority)}>{priorityLabels[priority]}</button>)}</div><label>Sort <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}><option value="priority">Priority</option><option value="tca">TCA</option><option value="probability">Max probability</option><option value="range">Minimum range</option></select><ChevronDown size={12} /></label></div>
             {!fleetActive ? <div className="rail-empty"><Layers3 size={22} /><strong>Global context is active</strong><p>Activate the India fleet to filter the current SOCRATES run and open the highest screening priority.</p></div> : <div className="event-queue">{sortedEvents.slice(0, 60).map((event) => <button key={event.id} className={`event-row ${selectedEventId === event.id ? 'selected' : ''}`} onClick={() => void selectEvent(event)}><span className={`priority-dot ${event.priority}`} /><span className="event-names"><strong>{cleanName(event.primaryName)}</strong><small>{cleanName(event.secondaryName)}</small></span><span className="event-figures"><b>{event.rangeKm?.toFixed(2) ?? '—'} km</b><small>{event.maximumProbability?.toExponential(1) ?? 'Needs data'}</small></span></button>)}</div>}
-            <div className="rail-sources"><SourceStatus status={catalog?.status} title="Orbit catalogue" detail={`${catalog?.count.toLocaleString() ?? '—'} active payload records`} /><SourceStatus status={conjunctions?.status} title="SOCRATES screening" detail={`${conjunctions?.run.conjunctionCount?.toLocaleString() ?? '—'} conjunctions in run`} /></div>
+            <div className="rail-sources"><SourceStatus status={catalog?.status} title="Orbit catalogue" detail={`${catalog?.count.toLocaleString() ?? '—'} active payload records`} /><SourceStatus status={conjunctions?.status} title="SOCRATES screening" detail={`${conjunctions?.run.conjunctionCount?.toLocaleString() ?? '—'} conjunctions in run`} /><SourceStatus status={threats?.status} title="Risk-object overlay" detail={`${threats?.positionedCount ?? '—'} positioned · ${threats?.count ?? '—'} screened`} /></div>
           </> : <>
             <div className="rail-title"><span>CDM validation</span><b>ESA event {validation.eventId}</b></div>
             <div className="validation-card selected"><div><Database size={15} /><span>Held-out event fixture</span></div><strong>Collision Avoidance Challenge</strong><p>{validation.visibleCdms.length} messages visible through T−2 · {validation.fullCdmCount} messages recorded</p></div>
@@ -296,8 +421,9 @@ export default function OrbitScene() {
         </aside>}
 
         <section className="visual-workspace">
-          {mode === 'screening' ? <OrbitGlobe catalogue={catalog?.objects ?? []} focusRecords={focusRecords} fleetIds={watchlist} selectedIds={selectedIds} previewId={previewId} focusCatalogId={focusCatalogId} simulationTime={simulationTime} showCatalogue={catalogueVisible} onObjectSelect={(id) => setFocusCatalogId(id)} /> : <EncounterScene point={revealed ? validation.recordedOutcome : baseline} />}
-          <div className="scene-topline"><div><span>{mode === 'screening' ? 'Global orbital context' : `ESA held-out event ${validation.eventId}`}</span><strong>{mode === 'screening' ? `${catalog?.count.toLocaleString() ?? '—'} SGP4-propagated active payloads` : 'R–T–N encounter frame · absolute Earth position unavailable'}</strong></div>{mode === 'screening' && <button onClick={() => setCatalogueVisible((value) => !value)}>{catalogueVisible ? <Eye size={14} /> : <EyeOff size={14} />}{catalogueVisible ? 'Catalogue visible' : 'Catalogue hidden'}</button>}</div>
+          {mode === 'screening' ? <OrbitGlobe catalogue={catalog?.objects ?? []} focusRecords={focusRecords} threats={threats?.objects ?? []} fleetIds={watchlist} selectedIds={selectedIds} selectedSatelliteId={selectedSatelliteId} previewId={previewId} focusCatalogId={focusCatalogId} simulationTime={simulationTime} showCatalogue={catalogueVisible} onObjectSelect={selectSatellite} /> : <EncounterScene point={revealed ? validation.recordedOutcome : baseline} />}
+          <div className="scene-topline"><div><span>{mode === 'screening' ? 'Global orbital context · click any object' : `ESA held-out event ${validation.eventId}`}</span><strong>{mode === 'screening' ? `${catalog?.count.toLocaleString() ?? '—'} active satellites · ${threats?.positionedCount.toLocaleString() ?? '—'} positioned risk objects` : 'R–T–N encounter frame · absolute Earth position unavailable'}</strong></div>{mode === 'screening' && <button onClick={() => setCatalogueVisible((value) => !value)}>{catalogueVisible ? <Eye size={14} /> : <EyeOff size={14} />}{catalogueVisible ? 'Catalogue visible' : 'Catalogue hidden'}</button>}</div>
+          {mode === 'screening' && <div className="debris-legend"><div><span>Screened object size · RCS</span><b>{threats?.count ?? '—'} threats</b></div>{(['small', 'medium', 'large', 'unknown'] as DebrisSize[]).map((size) => <span key={size}><i style={{ background: debrisColors[size] }} /><strong>{debrisLabels[size]}</strong><b>{debrisCounts[size]}</b></span>)}</div>}
           {mode === 'screening' && !fleetActive && <button className="floating-fleet-action" onClick={activateFleet}><Satellite size={18} /><span><strong>Focus India Earth Observation Fleet</strong><small>Open the current screening queue</small></span></button>}
           {mode === 'screening' && selectedEvent && <div className="floating-rtn"><PublicRtnInset primary={selectedPrimary} secondary={selectedSecondary} time={simulationTime} /></div>}
           {mode === 'validation' && <div className="validation-overlay"><span>{revealed ? 'Recorded final message' : 'Visible evidence at T−2 cutoff'}</span><strong>log₁₀ risk {revealed ? validation.recordedOutcome.risk?.toFixed(4) : baseline.risk?.toFixed(4)}</strong><small>Miss distance {metric(revealed ? validation.recordedOutcome.miss_distance : baseline.miss_distance, 'm', 0)}</small></div>}
@@ -312,7 +438,7 @@ export default function OrbitScene() {
             <section className="explanation-panel"><div className="section-head"><span>Structured explanation</span><b>Deterministic</b></div><h3>What is happening</h3><p>{explanation.whatIsHappening}</p><h3>Recommended workflow steps</h3><ol>{explanation.recommendedSteps.map((step) => <li key={step}>{step}</li>)}</ol><h3>What this does not mean</h3><p>{explanation.limitation}</p></section>
             <details><summary>Raw SOCRATES values <ChevronDown size={13} /></summary><dl><dt>Primary element age</dt><dd>{metric(selectedEvent.primaryElementAgeDays, 'days')}</dd><dt>Secondary element age</dt><dd>{metric(selectedEvent.secondaryElementAgeDays, 'days')}</dd><dt>Event ID</dt><dd>{selectedEvent.id}</dd></dl></details>
             <details><summary>Source provenance & limits <ChevronDown size={13} /></summary><p>Screening metrics are from {conjunctions?.source}. Source update: {dateUtc(conjunctions?.sourceUpdatedAt ?? null)}. Public OMM propagation is contextual and may not reproduce the SOCRATES TCA exactly.</p></details>
-          </> : <div className="inspector-empty"><Crosshair size={25} /><h2>Select a screened event</h2><p>Activate the India fleet, then choose an event to inspect verified metrics, provenance and next steps.</p></div> : <>
+          </> : selectedSatelliteId && selectedSatelliteName ? <SatelliteProfile catalogId={selectedSatelliteId} name={selectedSatelliteName} record={selectedSatellite} threat={selectedThreat} risks={selectedSatelliteRisks} threatsById={threatsById} media={satelliteMedia} mediaLoading={mediaLoading} clock={clock} onSelectEvent={(event) => void selectEvent(event)} /> : <div className="inspector-empty"><Crosshair size={25} /><h2>Select any satellite</h2><p>Click any point on the globe or use search to open its mission image, orbital record, and every available fleet-screening risk.</p></div> : <>
             <div className="inspector-kicker"><span>Validation inspector</span><span className="priority-pill validation">Held out</span></div><h1>ESA event {validation.eventId}</h1><p className="validation-lede">An authentic message sequence from ESA’s Collision Avoidance Challenge, truncated at the T−2 decision cutoff.</p>
             <div className="metric-grid validation-metrics"><div><span>Visible CDMs</span><strong>{validation.visibleCdms.length}</strong></div><div><span>Cutoff</span><strong>T−{validation.cutoffDays} days</strong></div><div><span>Latest-known baseline</span><strong>{baseline.risk?.toFixed(5)}</strong></div><div><span>Relative speed</span><strong>{metric(baseline.relative_speed ? baseline.relative_speed / 1000 : null, 'km/s')}</strong></div></div>
             <section className="model-slot"><span>Phase 2 model integration</span><strong>No forecast inserted</strong><p>Persistence and gradient-boosting baselines, followed by PI-RNet, will be trained and tested event-wise. This slot intentionally contains no representative prediction.</p></section>

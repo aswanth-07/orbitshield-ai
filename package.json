@@ -10,7 +10,8 @@
     "build": "vinext build",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "test": "vitest run"
+    "test": "vitest run",
+    "refresh:threats": "node scripts/build-threat-snapshot.mjs"
   },
   "dependencies": {
     "lucide-react": "0.468.0",

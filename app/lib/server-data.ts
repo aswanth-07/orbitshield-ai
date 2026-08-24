@@ -2,14 +2,19 @@ import Papa from 'papaparse';
 
 import activeSnapshot from '../data/active-catalog.snapshot.json';
 import socratesSnapshot from '../data/socrates-fleet.snapshot.json';
+import threatSnapshot from '../data/threat-catalog.snapshot.json';
 import { INDIA_EO_IDS } from './fleet';
 import { enrichConjunction } from './screening';
 import type {
   CatalogResponse,
   ConjunctionRecord,
   ConjunctionResponse,
+  DebrisSize,
   OmmRecord,
+  SatcatRecord,
   SocratesRun,
+  ThreatObject,
+  ThreatResponse,
 } from './types';
 
 const USER_AGENT = 'OrbitShield-AI/1.0 college prototype (github.com/aswanth-07/orbitshield-ai)';
@@ -29,6 +34,18 @@ type SnapshotSocrates = {
   fetchedAt: string;
   run: SocratesRun;
   events: Array<Omit<ConjunctionRecord, 'id' | 'priority' | 'reasons' | 'flags'>>;
+};
+type SnapshotThreatCatalogue = {
+  source: string;
+  sourceUpdatedAt: string | null;
+  fetchedAt: string;
+  count: number;
+  positionedCount: number;
+  objects: Array<{
+    catalogId: number;
+    record: OmmRecord | null;
+    satcat: SatcatRecord | null;
+  }>;
 };
 
 let activeCache: CacheEntry<CatalogResponse> | null = null;
@@ -274,4 +291,86 @@ export async function getConjunctions(): Promise<ConjunctionResponse> {
     conjunctionCache = { value, expiresAt: now + ONE_HOUR };
     return value;
   }
+}
+
+export function debrisSizeFromRcs(rcs: number | null): DebrisSize {
+  if (rcs === null || !Number.isFinite(rcs) || rcs < 0) return 'unknown';
+  if (rcs < 0.1) return 'small';
+  if (rcs <= 1) return 'medium';
+  return 'large';
+}
+
+export async function getThreats(): Promise<ThreatResponse> {
+  const conjunctions = await getConjunctions();
+  const snapshot = threatSnapshot as SnapshotThreatCatalogue;
+  const snapshotById = new Map(snapshot.objects.map((item) => [item.catalogId, item]));
+  const aggregates = new Map<number, {
+    name: string;
+    eventIds: string[];
+    protectedSatelliteIds: Set<number>;
+    maximumProbability: number | null;
+    minimumRangeKm: number | null;
+    nextTca: string | null;
+  }>();
+
+  for (const event of conjunctions.events) {
+    const primaryProtected = INDIA_EO_IDS.has(event.primaryCatalogId);
+    const secondaryProtected = INDIA_EO_IDS.has(event.secondaryCatalogId);
+    if (primaryProtected === secondaryProtected) continue;
+    const catalogId = primaryProtected ? event.secondaryCatalogId : event.primaryCatalogId;
+    const protectedCatalogId = primaryProtected ? event.primaryCatalogId : event.secondaryCatalogId;
+    const name = primaryProtected ? event.secondaryName : event.primaryName;
+    const existing = aggregates.get(catalogId) ?? {
+      name,
+      eventIds: [],
+      protectedSatelliteIds: new Set<number>(),
+      maximumProbability: null,
+      minimumRangeKm: null,
+      nextTca: null,
+    };
+    existing.eventIds.push(event.id);
+    existing.protectedSatelliteIds.add(protectedCatalogId);
+    if (event.maximumProbability !== null && (existing.maximumProbability === null || event.maximumProbability > existing.maximumProbability)) {
+      existing.maximumProbability = event.maximumProbability;
+    }
+    if (event.rangeKm !== null && (existing.minimumRangeKm === null || event.rangeKm < existing.minimumRangeKm)) {
+      existing.minimumRangeKm = event.rangeKm;
+    }
+    if (!existing.nextTca || new Date(event.tca) < new Date(existing.nextTca)) existing.nextTca = event.tca;
+    aggregates.set(catalogId, existing);
+  }
+
+  const objects: ThreatObject[] = [...aggregates].map(([catalogId, aggregate]) => {
+    const snapshotObject = snapshotById.get(catalogId);
+    const satcat = snapshotObject?.satcat ?? null;
+    const rcs = finite(satcat?.RCS);
+    return {
+      catalogId,
+      name: (satcat?.OBJECT_NAME || aggregate.name).replace(/\s*\[[+?−-]\]\s*$/, '').trim(),
+      objectType: satcat?.OBJECT_TYPE || (/DEB/i.test(aggregate.name) ? 'DEB' : /R\/B/i.test(aggregate.name) ? 'R/B' : 'UNK'),
+      owner: satcat?.OWNER || 'Unknown',
+      rcs,
+      size: debrisSizeFromRcs(rcs),
+      eventIds: aggregate.eventIds,
+      protectedSatelliteIds: [...aggregate.protectedSatelliteIds],
+      eventCount: aggregate.eventIds.length,
+      maximumProbability: aggregate.maximumProbability,
+      minimumRangeKm: aggregate.minimumRangeKm,
+      nextTca: aggregate.nextTca,
+      record: snapshotObject?.record ?? null,
+    };
+  }).sort((a, b) => (b.maximumProbability ?? -1) - (a.maximumProbability ?? -1));
+
+  return {
+    status: 'cached',
+    source: `${conjunctions.source} + ${snapshot.source}`,
+    sourceUpdatedAt: conjunctions.sourceUpdatedAt ?? snapshot.sourceUpdatedAt,
+    fetchedAt: conjunctions.fetchedAt,
+    count: objects.length,
+    positionedCount: objects.filter((item) => item.record).length,
+    objects,
+    message: objects.some((item) => !item.record)
+      ? 'All screened risk objects are listed; objects without public GP elements are not assigned a globe position.'
+      : undefined,
+  };
 }

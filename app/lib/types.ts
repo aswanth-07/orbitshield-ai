@@ -1,5 +1,6 @@
 export type DataStatus = 'current' | 'cached' | 'unavailable';
 export type ScreeningPriority = 'review' | 'watch' | 'low' | 'needs-data';
+export type DebrisSize = 'small' | 'medium' | 'large' | 'unknown';
 
 export type OmmRecord = {
   OBJECT_NAME: string;
@@ -95,6 +96,57 @@ export type ConjunctionResponse = {
   fetchedAt: string;
   run: SocratesRun;
   events: ConjunctionRecord[];
+  message?: string;
+};
+
+export type SatcatRecord = {
+  OBJECT_NAME: string;
+  OBJECT_ID: string;
+  NORAD_CAT_ID: number;
+  OBJECT_TYPE: 'PAY' | 'R/B' | 'DEB' | 'UNK' | string;
+  OWNER: string;
+  LAUNCH_DATE: string;
+  APOGEE: number | null;
+  PERIGEE: number | null;
+  RCS: number | null;
+};
+
+export type ThreatObject = {
+  catalogId: number;
+  name: string;
+  objectType: string;
+  owner: string;
+  rcs: number | null;
+  size: DebrisSize;
+  eventIds: string[];
+  protectedSatelliteIds: number[];
+  eventCount: number;
+  maximumProbability: number | null;
+  minimumRangeKm: number | null;
+  nextTca: string | null;
+  record: OmmRecord | null;
+};
+
+export type ThreatResponse = {
+  status: DataStatus;
+  source: string;
+  sourceUpdatedAt: string | null;
+  fetchedAt: string;
+  count: number;
+  positionedCount: number;
+  objects: ThreatObject[];
+  message?: string;
+};
+
+export type SatelliteMedia = {
+  status: 'available' | 'unavailable';
+  title?: string;
+  imageUrl?: string;
+  description?: string;
+  license?: string;
+  author?: string;
+  pageUrl?: string;
+  source: string;
   message?: string;
 };
 

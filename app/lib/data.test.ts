@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import snapshot from '../data/active-catalog.snapshot.json';
-import { getCatalog, normalizeOmm, parseSocratesCsv } from './server-data';
+import { debrisSizeFromRcs, getCatalog, normalizeOmm, parseSocratesCsv } from './server-data';
 import { propagateOmm } from './orbit';
 import { propagateCatalogue } from '../workers/propagation.worker';
 import type { OmmRecord } from './types';
@@ -35,6 +35,14 @@ describe('data normalization and propagation', () => {
     expect(event.priority).toBe('watch');
     expect(event.flags).toContain('close-range');
     expect(event.primaryCatalogId).toBe(41877);
+  });
+
+  it('maps published radar cross section into the official size bands', () => {
+    expect(debrisSizeFromRcs(0.099)).toBe('small');
+    expect(debrisSizeFromRcs(0.1)).toBe('medium');
+    expect(debrisSizeFromRcs(1)).toBe('medium');
+    expect(debrisSizeFromRcs(1.001)).toBe('large');
+    expect(debrisSizeFromRcs(null)).toBe('unknown');
   });
 
   it('falls back to the bundled snapshot after one non-200 response', async () => {
