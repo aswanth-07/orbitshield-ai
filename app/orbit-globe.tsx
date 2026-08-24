@@ -245,7 +245,7 @@ export default function OrbitGlobe({
     return [{
       ...point,
       color: DEBRIS_COLORS[threat.size],
-      radius: (threat.size === 'large' ? 0.34 : threat.size === 'medium' ? 0.27 : 0.22) + (selected ? 0.08 : 0),
+      radius: (threat.size === 'large' ? 0.55 : threat.size === 'medium' ? 0.42 : 0.32) + (selected ? 0.15 : 0),
       role: `${threat.size} ${threat.objectType === 'PAY' ? 'conjunction object' : 'debris threat'}`,
       threat,
     }];
@@ -253,6 +253,24 @@ export default function OrbitGlobe({
 
   const threatArcs = useMemo<ThreatArc[]>(() => {
     if (!selectedSatelliteId) return [];
+    const selectedThreatPoint = threatPoints.find((point) => point.catalogId === selectedSatelliteId);
+    if (selectedThreatPoint) {
+      return selectedThreatPoint.threat.protectedSatelliteIds.flatMap((protectedCatalogId) => {
+        const record = focusRecords.find((item) => Number(item.NORAD_CAT_ID) === protectedCatalogId);
+        const point = record ? propagateOmm(record, new Date(simulationTime)) : null;
+        if (!point) return [];
+        return [{
+          startLat: selectedThreatPoint.lat,
+          startLng: selectedThreatPoint.lng,
+          startAltitude: selectedThreatPoint.altitude,
+          endLat: point.lat,
+          endLng: point.lng,
+          endAltitude: point.altitude,
+          color: selectedThreatPoint.color,
+          label: `${selectedThreatPoint.name} threatens ${point.name} · ${selectedThreatPoint.threat.eventCount} screened event${selectedThreatPoint.threat.eventCount === 1 ? '' : 's'}`,
+        }];
+      });
+    }
     const protectedRecord = focusRecords.find((record) => Number(record.NORAD_CAT_ID) === selectedSatelliteId);
     if (!protectedRecord) return [];
     const protectedPoint = propagateOmm(protectedRecord, new Date(simulationTime));

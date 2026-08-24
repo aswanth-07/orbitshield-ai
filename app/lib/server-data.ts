@@ -47,9 +47,18 @@ type SnapshotThreatCatalogue = {
     satcat: SatcatRecord | null;
   }>;
 };
+type ThreatAggregate = {
+  name: string;
+  eventIds: string[];
+  protectedSatelliteIds: Set<number>;
+  maximumProbability: number | null;
+  minimumRangeKm: number | null;
+  nextTca: string | null;
+};
 
 let activeCache: CacheEntry<CatalogResponse> | null = null;
 let conjunctionCache: CacheEntry<ConjunctionResponse> | null = null;
+let threatCache: CacheEntry<ThreatResponse> | null = null;
 const selectedCache = new Map<string, CacheEntry<CatalogResponse>>();
 
 function cloudflareCache(): Cache | null {
@@ -264,7 +273,7 @@ export async function getConjunctions(): Promise<ConjunctionResponse> {
     const directory = Array.isArray(directoryJson) ? directoryJson[0] : directoryJson;
     if (!directory?.FILE_NAME) throw new Error('SOCRATES directory did not name a run file');
     const source = `https://celestrak.org/SOCRATES/${directory.FILE_NAME}`;
-    const runResponse = await fetch(source, { ...fetchOptions(), headers: { ...fetchOptions().headers, Accept: 'text/csv' } });
+    const runResponse = await fetch(source, { ...fetchOptions(), headers: { ...fetchOptions().headers, Accept: 'application/octet-stream,text/csv;q=0.9,*/*;q=0.8' } });
     if (!runResponse.ok) throw new Error(`SOCRATES run returned HTTP ${runResponse.status}`);
     const csv = await runResponse.text();
     const events = parseSocratesCsv(csv, new Date());
@@ -300,19 +309,40 @@ export function debrisSizeFromRcs(rcs: number | null): DebrisSize {
   return 'large';
 }
 
-export async function getThreats(): Promise<ThreatResponse> {
-  const conjunctions = await getConjunctions();
-  const snapshot = threatSnapshot as SnapshotThreatCatalogue;
-  const snapshotById = new Map(snapshot.objects.map((item) => [item.catalogId, item]));
-  const aggregates = new Map<number, {
-    name: string;
-    eventIds: string[];
-    protectedSatelliteIds: Set<number>;
-    maximumProbability: number | null;
-    minimumRangeKm: number | null;
-    nextTca: string | null;
-  }>();
+async function fetchLiveThreatRecords(ids: number[], fallback: Map<number, OmmRecord | null>) {
+  const records = new Map(fallback);
+  let cursor = 0;
+  let liveCount = 0;
+  let halted = false;
+  let latestEpoch: string | null = null;
 
+  async function worker() {
+    while (!halted && cursor < ids.length) {
+      const catalogId = ids[cursor++];
+      try {
+        const response = await fetch(`${CATNR_URL}${catalogId}`, fetchOptions());
+        if (response.status === 403) {
+          halted = true;
+          return;
+        }
+        if (!response.ok) continue;
+        const [record] = normalizeOmm(await response.json());
+        if (!record) continue;
+        records.set(catalogId, record);
+        liveCount += 1;
+        if (!latestEpoch || new Date(record.EPOCH) > new Date(latestEpoch)) latestEpoch = record.EPOCH;
+      } catch {
+        // Keep the timestamped per-object fallback when a live element is unavailable.
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(8, ids.length) }, worker));
+  return { records, liveCount, latestEpoch, halted };
+}
+
+function aggregateThreats(conjunctions: ConjunctionResponse) {
+  const aggregates = new Map<number, ThreatAggregate>();
   for (const event of conjunctions.events) {
     const primaryProtected = INDIA_EO_IDS.has(event.primaryCatalogId);
     const secondaryProtected = INDIA_EO_IDS.has(event.secondaryCatalogId);
@@ -339,8 +369,15 @@ export async function getThreats(): Promise<ThreatResponse> {
     if (!existing.nextTca || new Date(event.tca) < new Date(existing.nextTca)) existing.nextTca = event.tca;
     aggregates.set(catalogId, existing);
   }
+  return aggregates;
+}
 
-  const objects: ThreatObject[] = [...aggregates].map(([catalogId, aggregate]) => {
+function buildThreatObjects(
+  aggregates: Map<number, ThreatAggregate>,
+  snapshotById: Map<number, SnapshotThreatCatalogue['objects'][number]>,
+  records: Map<number, OmmRecord | null>,
+) {
+  return [...aggregates].map(([catalogId, aggregate]): ThreatObject => {
     const snapshotObject = snapshotById.get(catalogId);
     const satcat = snapshotObject?.satcat ?? null;
     const rcs = finite(satcat?.RCS);
@@ -357,20 +394,66 @@ export async function getThreats(): Promise<ThreatResponse> {
       maximumProbability: aggregate.maximumProbability,
       minimumRangeKm: aggregate.minimumRangeKm,
       nextTca: aggregate.nextTca,
-      record: snapshotObject?.record ?? null,
+      record: records.get(catalogId) ?? null,
     };
   }).sort((a, b) => (b.maximumProbability ?? -1) - (a.maximumProbability ?? -1));
+}
 
-  return {
+export function getBundledScreening() {
+  const conjunctions = fallbackConjunctions(new Date());
+  const snapshot = threatSnapshot as SnapshotThreatCatalogue;
+  const snapshotById = new Map(snapshot.objects.map((item) => [item.catalogId, item]));
+  const aggregates = aggregateThreats(conjunctions);
+  const records = new Map(snapshot.objects.map((item) => [item.catalogId, item.record]));
+  const objects = buildThreatObjects(aggregates, snapshotById, records);
+  const threats: ThreatResponse = {
     status: 'cached',
     source: `${conjunctions.source} + ${snapshot.source}`,
-    sourceUpdatedAt: conjunctions.sourceUpdatedAt ?? snapshot.sourceUpdatedAt,
-    fetchedAt: conjunctions.fetchedAt,
+    sourceUpdatedAt: snapshot.sourceUpdatedAt,
+    fetchedAt: snapshot.fetchedAt,
     count: objects.length,
     positionedCount: objects.filter((item) => item.record).length,
     objects,
-    message: objects.some((item) => !item.record)
-      ? 'All screened risk objects are listed; objects without public GP elements are not assigned a globe position.'
-      : undefined,
+    message: 'Fast timestamped snapshot loaded while the live CelesTrak refresh runs.',
   };
+  return { conjunctions, threats, refreshedAt: snapshot.fetchedAt };
+}
+
+export async function getThreats(): Promise<ThreatResponse> {
+  const now = Date.now();
+  if (threatCache && threatCache.expiresAt > now) return threatCache.value;
+  const edgeValue = await readEdgeCache<ThreatResponse>('threat-overlay-current');
+  if (edgeValue) {
+    threatCache = { value: edgeValue, expiresAt: now + TWO_HOURS };
+    return edgeValue;
+  }
+
+  const conjunctions = await getConjunctions();
+  const snapshot = threatSnapshot as SnapshotThreatCatalogue;
+  const snapshotById = new Map(snapshot.objects.map((item) => [item.catalogId, item]));
+  const aggregates = aggregateThreats(conjunctions);
+
+  const threatIds = [...aggregates.keys()];
+  const fallbackRecords = new Map(threatIds.map((catalogId) => [catalogId, snapshotById.get(catalogId)?.record ?? null]));
+  const live = await fetchLiveThreatRecords(threatIds, fallbackRecords);
+
+  const objects = buildThreatObjects(aggregates, snapshotById, live.records);
+
+  const value: ThreatResponse = {
+    status: conjunctions.status === 'current' && live.liveCount >= Math.ceil(threatIds.length * 0.8) ? 'current' : 'cached',
+    source: `${conjunctions.source} + CelesTrak live GP OMM + SATCAT metadata`,
+    sourceUpdatedAt: live.latestEpoch ?? conjunctions.sourceUpdatedAt ?? snapshot.sourceUpdatedAt,
+    fetchedAt: nowIso(),
+    count: objects.length,
+    positionedCount: objects.filter((item) => item.record).length,
+    objects,
+    message: live.halted
+      ? 'CelesTrak throttled the refresh; current screening metrics remain visible and timestamped orbit fallbacks fill the incomplete live set.'
+      : live.liveCount < threatIds.length
+        ? `${live.liveCount} of ${threatIds.length} risk-object element sets refreshed live; timestamped fallbacks fill the remaining public-data gaps.`
+        : `All ${live.liveCount} risk-object element sets refreshed from CelesTrak.`,
+  };
+  threatCache = { value, expiresAt: now + TWO_HOURS };
+  await writeEdgeCache('threat-overlay-current', value, TWO_HOURS);
+  return value;
 }

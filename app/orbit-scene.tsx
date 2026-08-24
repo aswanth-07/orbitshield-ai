@@ -5,9 +5,9 @@ import Image from 'next/image';
 import {
   AlertTriangle, Check, ChevronDown, Crosshair, Database, Eye, EyeOff, Layers3,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, Pause, Play, Plus, RotateCcw,
-  Search, Satellite, ShieldCheck, X,
+  RefreshCw, Search, Satellite, ShieldCheck, X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import cdmFixture from './data/esa-validation-event.json';
 import EncounterScene from './encounter-scene';
@@ -113,8 +113,18 @@ function SatelliteProfile({
   clock: number;
   onSelectEvent: (event: ConjunctionRecord) => void;
 }) {
+  const impactedSatellites = threat ? [...risks.reduce((map, event) => {
+    const otherId = event.primaryCatalogId === catalogId ? event.secondaryCatalogId : event.primaryCatalogId;
+    const otherName = cleanName(event.primaryCatalogId === catalogId ? event.secondaryName : event.primaryName);
+    const current = map.get(otherId);
+    if (!current || (event.maximumProbability ?? -1) > (current.event.maximumProbability ?? -1)) {
+      map.set(otherId, { catalogId: otherId, name: otherName, event });
+    }
+    return map;
+  }, new Map<number, { catalogId: number; name: string; event: ConjunctionRecord }>()).values()] : [];
+
   return <>
-    <div className="inspector-kicker"><span>Satellite profile</span><span className={`priority-pill ${risks.some((event) => event.priority === 'review') ? 'review' : risks.length ? 'watch' : 'low'}`}>{risks.length} possible risk{risks.length === 1 ? '' : 's'}</span></div>
+    <div className="inspector-kicker"><span>{threat ? threat.objectType === 'PAY' ? 'Conjunction object' : 'Debris risk object' : 'Satellite profile'}</span><span className={`priority-pill ${risks.some((event) => event.priority === 'review') ? 'review' : risks.length ? 'watch' : 'low'}`}>{threat ? `${impactedSatellites.length} satellite${impactedSatellites.length === 1 ? '' : 's'} at risk` : `${risks.length} possible risk${risks.length === 1 ? '' : 's'}`}</span></div>
     <h1>{name}</h1>
     <div className="pair-line"><span>NORAD {catalogId}</span><i /><span>{threat?.objectType ?? record?.OBJECT_TYPE ?? 'Active payload'}</span></div>
     <div className="satellite-media">
@@ -131,7 +141,9 @@ function SatelliteProfile({
     </div>
     {threat ? <div className="selected-size"><i style={{ background: debrisColors[threat.size] }} /><span>{debrisLabels[threat.size]}</span><b>{threat.eventCount} screening event{threat.eventCount === 1 ? '' : 's'}</b></div> : null}
     <section className="risk-panel">
-      <div className="section-head"><span>All possible collision risks</span><b>{risks.length ? 'SOCRATES screened' : 'No match'}</b></div>
+      <div className="section-head"><span>{threat ? 'Satellites under collision risk' : 'All possible collision risks'}</span><b>{risks.length ? 'Live SOCRATES' : 'No match'}</b></div>
+      {threat && impactedSatellites.length ? <div className="affected-satellites">{impactedSatellites.map((satellite) => <button key={satellite.catalogId} onClick={() => onSelectEvent(satellite.event)}><Satellite size={13} /><span><strong>{satellite.name}</strong><small>NORAD {satellite.catalogId}</small></span><b>{formatProbability(satellite.event.maximumProbability)}</b></button>)}</div> : null}
+      {threat && risks.length ? <div className="collision-detail-label">All live collision details · {risks.length} events</div> : null}
       {risks.length ? <div className="satellite-risk-list">{risks.map((event) => {
         const otherId = event.primaryCatalogId === catalogId ? event.secondaryCatalogId : event.primaryCatalogId;
         const otherName = cleanName(event.primaryCatalogId === catalogId ? event.secondaryName : event.primaryName);
@@ -174,6 +186,8 @@ export default function OrbitScene() {
   const [clock, setClock] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [catalogueVisible, setCatalogueVisible] = useState(true);
+  const [dataRefreshing, setDataRefreshing] = useState(false);
+  const [lastLiveRefresh, setLastLiveRefresh] = useState(0);
   const lastTick = useRef(0);
   const watchlistReady = useRef(false);
 
@@ -212,27 +226,43 @@ export default function OrbitScene() {
     }
   }, [watchlist]);
 
+  const refreshScreeningData = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setDataRefreshing(true);
+    try {
+      const response = await fetch('/api/live').then((result) => result.json() as Promise<{ conjunctions: ConjunctionResponse; threats: ThreatResponse; refreshedAt: string }>);
+      setConjunctions(response.conjunctions);
+      setThreats(response.threats);
+      setLastLiveRefresh(Date.now());
+    } catch {
+      // Preserve the last usable live or cached response during a transient refresh failure.
+    } finally {
+      if (showSpinner) setDataRefreshing(false);
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
-    Promise.all([
-      fetch('/api/catalog?group=active').then((response) => response.json() as Promise<CatalogResponse>),
-      fetch('/api/conjunctions?fleet=india-eo').then((response) => response.json() as Promise<ConjunctionResponse>),
-    ]).then(([catalogResponse, conjunctionResponse]) => {
-      if (!active) return;
-      setCatalog(catalogResponse);
-      setConjunctions(conjunctionResponse);
+    fetch('/api/catalog?group=active').then((response) => response.json() as Promise<CatalogResponse>).then((catalogResponse) => {
+      if (active) setCatalog(catalogResponse);
     }).catch(() => {
+      if (active) setCatalog({ status: 'unavailable', source: 'Catalogue unavailable', sourceUpdatedAt: null, fetchedAt: new Date().toISOString(), count: 0, objects: [] });
+    });
+    fetch('/api/bootstrap').then((response) => response.json() as Promise<{ conjunctions: ConjunctionResponse; threats: ThreatResponse; refreshedAt: string }>).then((snapshot) => {
       if (!active) return;
-      setCatalog({ status: 'unavailable', source: 'Catalogue unavailable', sourceUpdatedAt: null, fetchedAt: new Date().toISOString(), count: 0, objects: [] });
-      setConjunctions(null);
-    });
-    fetch('/api/threats').then((response) => response.json() as Promise<ThreatResponse>).then((threatResponse) => {
-      if (active) setThreats(threatResponse);
+      setConjunctions(snapshot.conjunctions);
+      setThreats(snapshot.threats);
+      setLastLiveRefresh(new Date(snapshot.refreshedAt).getTime());
     }).catch(() => {
-      if (active) setThreats(null);
+      // The live request below remains the authoritative fallback.
+    }).finally(() => {
+      if (active) void refreshScreeningData(false);
     });
-    return () => { active = false; };
-  }, []);
+    const refreshTimer = window.setInterval(() => void refreshScreeningData(false), 5 * 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(refreshTimer);
+    };
+  }, [refreshScreeningData]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -422,7 +452,7 @@ export default function OrbitScene() {
 
         <section className="visual-workspace">
           {mode === 'screening' ? <OrbitGlobe catalogue={catalog?.objects ?? []} focusRecords={focusRecords} threats={threats?.objects ?? []} fleetIds={watchlist} selectedIds={selectedIds} selectedSatelliteId={selectedSatelliteId} previewId={previewId} focusCatalogId={focusCatalogId} simulationTime={simulationTime} showCatalogue={catalogueVisible} onObjectSelect={selectSatellite} /> : <EncounterScene point={revealed ? validation.recordedOutcome : baseline} />}
-          <div className="scene-topline"><div><span>{mode === 'screening' ? 'Global orbital context · click any object' : `ESA held-out event ${validation.eventId}`}</span><strong>{mode === 'screening' ? `${catalog?.count.toLocaleString() ?? '—'} active satellites · ${threats?.positionedCount.toLocaleString() ?? '—'} positioned risk objects` : 'R–T–N encounter frame · absolute Earth position unavailable'}</strong></div>{mode === 'screening' && <button onClick={() => setCatalogueVisible((value) => !value)}>{catalogueVisible ? <Eye size={14} /> : <EyeOff size={14} />}{catalogueVisible ? 'Catalogue visible' : 'Catalogue hidden'}</button>}</div>
+          <div className="scene-topline"><div><span>{mode === 'screening' ? 'Global orbital context · click any satellite or debris' : `ESA held-out event ${validation.eventId}`}</span><strong>{mode === 'screening' ? `${catalog?.count.toLocaleString() ?? '—'} active satellites · ${threats?.positionedCount.toLocaleString() ?? '—'} live-positioned risk objects` : 'R–T–N encounter frame · absolute Earth position unavailable'}</strong>{mode === 'screening' ? <small className={`live-feed-line ${statusTone(threats?.status)}`} aria-live="polite"><i />{dataLabel(threats?.status)} feed · refreshed {lastLiveRefresh ? dateUtc(new Date(lastLiveRefresh).toISOString()) : 'loading'}</small> : null}</div>{mode === 'screening' && <div className="scene-actions"><button className={`refresh-button ${dataRefreshing ? 'refreshing' : ''}`} onClick={() => void refreshScreeningData(true)} disabled={dataRefreshing}><RefreshCw size={14} />{dataRefreshing ? 'Refreshing…' : 'Refresh live data'}</button><button onClick={() => setCatalogueVisible((value) => !value)}>{catalogueVisible ? <Eye size={14} /> : <EyeOff size={14} />}{catalogueVisible ? 'Catalogue visible' : 'Catalogue hidden'}</button></div>}</div>
           {mode === 'screening' && <div className="debris-legend"><div><span>Screened object size · RCS</span><b>{threats?.count ?? '—'} threats</b></div>{(['small', 'medium', 'large', 'unknown'] as DebrisSize[]).map((size) => <span key={size}><i style={{ background: debrisColors[size] }} /><strong>{debrisLabels[size]}</strong><b>{debrisCounts[size]}</b></span>)}</div>}
           {mode === 'screening' && !fleetActive && <button className="floating-fleet-action" onClick={activateFleet}><Satellite size={18} /><span><strong>Focus India Earth Observation Fleet</strong><small>Open the current screening queue</small></span></button>}
           {mode === 'screening' && selectedEvent && <div className="floating-rtn"><PublicRtnInset primary={selectedPrimary} secondary={selectedSecondary} time={simulationTime} /></div>}
