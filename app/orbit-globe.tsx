@@ -13,6 +13,8 @@ import { propagateOmm, sampleOrbitPath } from './lib/orbit';
 import type { ConjunctionRecord, OmmRecord, OrbitPath, PropagatedObject, ThreatObject } from './lib/types';
 import PropagationWorker from './workers/propagation.worker.ts?worker';
 
+export type OrbitCameraMode = 'global' | 'follow' | 'encounter' | 'free';
+
 type OrbitGlobeProps = {
   catalogue: OmmRecord[];
   focusRecords: OmmRecord[];
@@ -20,6 +22,8 @@ type OrbitGlobeProps = {
   fleetIds: number[];
   selectedEvent: ConjunctionRecord | null;
   selectedSatelliteId: number | null;
+  cameraMode: OrbitCameraMode;
+  cameraResetKey: number;
   previewId: number | null;
   focusCatalogId: number | null;
   simulationTime: number;
@@ -33,7 +37,7 @@ type ScenePoint = PropagatedObject & {
   role: string;
   selected: boolean;
   selectable: boolean;
-  markerKind: 'satellite' | 'debris' | 'cpa';
+  markerKind: 'satellite' | 'debris' | 'tca' | 'cpa';
   threat?: ThreatObject;
 };
 
@@ -94,6 +98,8 @@ export default function OrbitGlobe({
   fleetIds,
   selectedEvent,
   selectedSatelliteId,
+  cameraMode,
+  cameraResetKey,
   previewId,
   focusCatalogId,
   simulationTime,
@@ -106,6 +112,8 @@ export default function OrbitGlobe({
   const cloudRef = useRef<THREE.Points | null>(null);
   const onObjectSelectRef = useRef(onObjectSelect);
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const followedTargetRef = useRef<THREE.Vector3 | null>(null);
+  const positionedCameraKeyRef = useRef('');
   const [size, setSize] = useState({ width: 900, height: 700 });
   const [cataloguePoints, setCataloguePoints] = useState<PropagatedObject[]>([]);
   const [globeReady, setGlobeReady] = useState(false);
@@ -121,8 +129,21 @@ export default function OrbitGlobe({
     controls.autoRotateSpeed = 0.22;
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 115;
-    controls.maxDistance = 460;
+    controls.enableRotate = true;
+    controls.enablePan = true;
+    controls.enableZoom = true;
+    controls.screenSpacePanning = true;
+    controls.zoomToCursor = true;
+    controls.rotateSpeed = 0.62;
+    controls.panSpeed = 0.82;
+    controls.zoomSpeed = 0.85;
+    controls.minDistance = 18;
+    controls.maxDistance = 820;
+    controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+    controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
+    controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
+    controls.touches.ONE = THREE.TOUCH.ROTATE;
+    controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
     globeRef.current.pointOfView({ lat: 18, lng: 78, altitude: 2.15 }, 0);
     setGlobeReady(true);
   }, []);
@@ -193,8 +214,8 @@ export default function OrbitGlobe({
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const material = new THREE.PointsMaterial({
       color: SATELLITE_COLOR,
-      size: 0.42,
-      opacity: 0.52,
+      size: 0.48,
+      opacity: 0.68,
       transparent: true,
       depthWrite: false,
       sizeAttenuation: true,
@@ -252,24 +273,47 @@ export default function OrbitGlobe({
     [selectedEvent],
   );
 
+  const reviewPair = useMemo(() => {
+    if (!selectedEvent) return null;
+    const pairIds = new Set([selectedEvent.primaryCatalogId, selectedEvent.secondaryCatalogId]);
+    const protectedCatalogId = selectedSatelliteId && pairIds.has(selectedSatelliteId)
+      ? selectedSatelliteId
+      : selectedEvent.primaryCatalogId;
+    const counterpartCatalogId = protectedCatalogId === selectedEvent.primaryCatalogId
+      ? selectedEvent.secondaryCatalogId
+      : selectedEvent.primaryCatalogId;
+    const counterpartThreat = threats.find((threat) => threat.catalogId === counterpartCatalogId);
+    const counterpartRecord = focusRecords.find((record) => Number(record.NORAD_CAT_ID) === counterpartCatalogId);
+    return {
+      protectedCatalogId,
+      counterpartCatalogId,
+      counterpartColor: objectMarkerColor(counterpartThreat?.objectType ?? counterpartRecord?.OBJECT_TYPE, counterpartThreat?.size),
+    };
+  }, [focusRecords, selectedEvent, selectedSatelliteId, threats]);
+
   const interactivePoints = useMemo<ScenePoint[]>(() => {
     return focusRecords.flatMap((record) => {
+      const catalogId = Number(record.NORAD_CAT_ID);
+      if (selectedEvent && !selectedIds.includes(catalogId)) return [];
+      if (!selectedEvent && selectedSatelliteId && !showCatalogue && catalogId !== selectedSatelliteId) return [];
       const point = propagateOmm(record, new Date(simulationTime));
       if (!point) return [];
       const selected = selectedIds.includes(point.catalogId) || selectedSatelliteId === point.catalogId;
       return [{
         ...point,
         color: SATELLITE_COLOR,
-        radius: selected ? 0.34 : previewId === point.catalogId ? 0.28 : 0.19,
+        radius: selected ? 0.36 : previewId === point.catalogId ? 0.3 : 0.21,
         role: selectedIds.includes(point.catalogId) ? 'selected conjunction satellite' : fleetIds.includes(point.catalogId) ? 'active watchlist satellite' : 'satellite search preview',
         selected,
         selectable: true,
         markerKind: 'satellite' as const,
       }];
     });
-  }, [focusRecords, fleetIds, previewId, selectedIds, selectedSatelliteId, simulationTime]);
+  }, [focusRecords, fleetIds, previewId, selectedEvent, selectedIds, selectedSatelliteId, showCatalogue, simulationTime]);
 
   const threatPoints = useMemo<ScenePoint[]>(() => threats.flatMap((threat) => {
+    if (selectedEvent && !selectedIds.includes(threat.catalogId)) return [];
+    if (!selectedEvent && selectedSatelliteId && !showCatalogue && threat.catalogId !== selectedSatelliteId) return [];
     if (!threat.record) return [];
     const point = propagateOmm(threat.record, new Date(simulationTime));
     if (!point) return [];
@@ -285,7 +329,7 @@ export default function OrbitGlobe({
       markerKind: satellite ? 'satellite' as const : 'debris' as const,
       threat,
     }];
-  }), [selectedIds, selectedSatelliteId, simulationTime, threats]);
+  }), [selectedEvent, selectedIds, selectedSatelliteId, showCatalogue, simulationTime, threats]);
 
   const threatIds = useMemo(() => new Set(threatPoints.map((point) => point.catalogId)), [threatPoints]);
   const pairRecords = useMemo(() => {
@@ -313,13 +357,29 @@ export default function OrbitGlobe({
       markerKind: 'cpa',
     };
   }, [selectedEvent, tcaPoints]);
+  const tcaScenePoints = useMemo<ScenePoint[]>(() => {
+    if (!selectedEvent || !reviewPair || tcaPoints.length !== 2) return [];
+    return tcaPoints.map((point) => {
+      const protectedObject = point.catalogId === reviewPair.protectedCatalogId;
+      return {
+        ...point,
+        color: protectedObject ? SATELLITE_COLOR : reviewPair.counterpartColor,
+        radius: 0.17,
+        role: `${protectedObject ? 'selected satellite' : 'paired object'} position at TCA · public-element approximation`,
+        selected: true,
+        selectable: false,
+        markerKind: 'tca',
+      };
+    });
+  }, [reviewPair, selectedEvent, tcaPoints]);
   const scenePoints = useMemo(
     () => [
       ...interactivePoints.filter((point) => !threatIds.has(point.catalogId)),
       ...threatPoints,
+      ...tcaScenePoints,
       ...(cpaPoint ? [cpaPoint] : []),
     ],
-    [cpaPoint, interactivePoints, threatIds, threatPoints],
+    [cpaPoint, interactivePoints, tcaScenePoints, threatIds, threatPoints],
   );
 
   const orbitPathMinute = selectedEvent
@@ -331,25 +391,32 @@ export default function OrbitGlobe({
     const pairIds = new Set(selectedIds);
     const background = fleetIds.flatMap((catalogId) => {
       if (pairIds.has(catalogId)) return [];
+      if (!selectedEvent && catalogId === selectedSatelliteId) return [];
       const record = recordById.get(catalogId);
       if (!record) return [];
       const style = orbitVisualStyle('watchlist');
       return [{ ...sampleOrbitPath(record, sampledAt, style.color, 96), role: 'watchlist' as const, ...style }];
     });
-    if (!selectedEvent) return background;
+    if (!selectedEvent) {
+      if (!selectedSatelliteId) return background;
+      const selectedRecord = recordById.get(selectedSatelliteId);
+      if (!selectedRecord) return background;
+      const selectedThreat = threats.find((threat) => threat.catalogId === selectedSatelliteId);
+      const selectedColor = objectMarkerColor(selectedThreat?.objectType ?? selectedRecord.OBJECT_TYPE, selectedThreat?.size);
+      const selectedStyle = orbitVisualStyle('selected-satellite');
+      return [{
+        ...sampleOrbitPath(selectedRecord, sampledAt, selectedColor, 140),
+        role: 'selected-satellite' as const,
+        ...selectedStyle,
+        color: selectedColor,
+      }, ...background];
+    }
 
-    const protectedCatalogId = selectedSatelliteId && pairIds.has(selectedSatelliteId)
-      ? selectedSatelliteId
-      : selectedEvent.primaryCatalogId;
-    const counterpartCatalogId = protectedCatalogId === selectedEvent.primaryCatalogId
-      ? selectedEvent.secondaryCatalogId
-      : selectedEvent.primaryCatalogId;
-    const protectedRecord = recordById.get(protectedCatalogId);
-    const counterpartRecord = recordById.get(counterpartCatalogId);
-    const counterpartThreat = threats.find((threat) => threat.catalogId === counterpartCatalogId);
-    const counterpartColor = objectMarkerColor(counterpartThreat?.objectType ?? counterpartRecord?.OBJECT_TYPE, counterpartThreat?.size);
+    if (!reviewPair) return background;
+    const protectedRecord = recordById.get(reviewPair.protectedCatalogId);
+    const counterpartRecord = recordById.get(reviewPair.counterpartCatalogId);
     const selectedStyle = orbitVisualStyle('selected-satellite');
-    const pairedStyle = orbitVisualStyle('paired-object', counterpartColor);
+    const pairedStyle = orbitVisualStyle('paired-object', reviewPair.counterpartColor);
     const selectedPath = protectedRecord
       ? [{ ...sampleOrbitPath(protectedRecord, sampledAt, selectedStyle.color, 140), role: 'selected-satellite' as const, ...selectedStyle }]
       : [];
@@ -364,22 +431,102 @@ export default function OrbitGlobe({
       ...cpaStyle,
       points: tcaPoints.map(({ lat, lng, altitude }) => ({ lat, lng, altitude })),
     }] : [];
-    return [...background, ...selectedPath, ...pairedPath, ...cpaPath];
-  }, [fleetIds, focusRecords, orbitPathMinute, selectedEvent, selectedIds, selectedSatelliteId, tcaPoints, threats]);
+    const depthPaths = tcaPoints.map((point) => {
+      const color = point.catalogId === reviewPair.protectedCatalogId ? SATELLITE_COLOR : reviewPair.counterpartColor;
+      const style = orbitVisualStyle('depth-guide', color);
+      return {
+        catalogId: point.catalogId,
+        name: `${point.name} altitude depth guide at TCA`,
+        role: 'depth-guide' as const,
+        ...style,
+        points: [
+          { lat: point.lat, lng: point.lng, altitude: 0.004 },
+          { lat: point.lat, lng: point.lng, altitude: point.altitude },
+        ],
+      };
+    });
+    return [...background, ...selectedPath, ...pairedPath, ...depthPaths, ...cpaPath];
+  }, [fleetIds, focusRecords, orbitPathMinute, reviewPair, selectedEvent, selectedIds, selectedSatelliteId, tcaPoints, threats]);
 
   useEffect(() => {
-    if (!globeReady || !focusCatalogId || !globeRef.current) return;
-    if (selectedEvent && cpaPoint) {
-      globeRef.current.pointOfView({ lat: cpaPoint.lat, lng: cpaPoint.lng, altitude: 1.42 }, 850);
+    if (!globeReady || !globeRef.current) return;
+    const globe = globeRef.current;
+    const controls = globe.controls();
+    controls.enableRotate = true;
+    controls.enablePan = true;
+    controls.enableZoom = true;
+    controls.screenSpacePanning = true;
+    controls.zoomToCursor = true;
+    controls.autoRotate = cameraMode === 'global';
+
+    if (cameraMode === 'free') {
+      followedTargetRef.current = null;
+      positionedCameraKeyRef.current = `free:${cameraResetKey}`;
       return;
     }
+
+    if (cameraMode === 'encounter' && selectedEvent && cpaPoint) {
+      controls.autoRotate = false;
+      followedTargetRef.current = null;
+      const cameraKey = `encounter:${selectedEvent.id}:${cameraResetKey}`;
+      if (positionedCameraKeyRef.current === cameraKey) return;
+      const targetCoordinates = globe.getCoords(cpaPoint.lat, cpaPoint.lng, cpaPoint.altitude);
+      const target = new THREE.Vector3(targetCoordinates.x, targetCoordinates.y, targetCoordinates.z);
+      const outward = target.clone().normalize();
+      const polarAxis = new THREE.Vector3(0, 1, 0);
+      const east = new THREE.Vector3().crossVectors(polarAxis, outward);
+      if (east.lengthSq() < 0.001) east.set(1, 0, 0);
+      east.normalize();
+      const north = new THREE.Vector3().crossVectors(outward, east).normalize();
+      globe.camera().position.copy(target.clone()
+        .add(outward.multiplyScalar(118))
+        .add(east.multiplyScalar(58))
+        .add(north.multiplyScalar(38)));
+      controls.target.copy(target);
+      controls.update();
+      positionedCameraKeyRef.current = cameraKey;
+      return;
+    }
+
     const point = interactivePoints.find((item) => item.catalogId === focusCatalogId)
       ?? threatPoints.find((item) => item.catalogId === focusCatalogId);
-    if (point) globeRef.current.pointOfView({ lat: point.lat, lng: point.lng, altitude: 1.55 }, 850);
-  }, [cpaPoint, focusCatalogId, globeReady, interactivePoints, selectedEvent, threatPoints]);
+    if (cameraMode === 'follow' && point) {
+      controls.autoRotate = false;
+      const coordinates = globe.getCoords(point.lat, point.lng, point.altitude);
+      const target = new THREE.Vector3(coordinates.x, coordinates.y, coordinates.z);
+      const cameraKey = `follow:${point.catalogId}:${cameraResetKey}`;
+      if (positionedCameraKeyRef.current !== cameraKey) {
+        const outward = target.clone().normalize();
+        const polarAxis = new THREE.Vector3(0, 1, 0);
+        const east = new THREE.Vector3().crossVectors(polarAxis, outward);
+        if (east.lengthSq() < 0.001) east.set(1, 0, 0);
+        east.normalize();
+        const north = new THREE.Vector3().crossVectors(outward, east).normalize();
+        globe.camera().position.copy(target.clone()
+          .add(outward.multiplyScalar(42))
+          .add(east.multiplyScalar(24))
+          .add(north.multiplyScalar(15)));
+        positionedCameraKeyRef.current = cameraKey;
+      } else if (followedTargetRef.current) {
+        globe.camera().position.add(target.clone().sub(followedTargetRef.current));
+      }
+      controls.target.copy(target);
+      followedTargetRef.current = target;
+      controls.update();
+      return;
+    }
+
+    const cameraKey = `global:${cameraResetKey}`;
+    if (positionedCameraKeyRef.current === cameraKey) return;
+    followedTargetRef.current = null;
+    controls.target.set(0, 0, 0);
+    controls.autoRotate = true;
+    globe.pointOfView({ lat: 18, lng: 78, altitude: 2.15 }, 700);
+    positionedCameraKeyRef.current = cameraKey;
+  }, [cameraMode, cameraResetKey, cpaPoint, focusCatalogId, globeReady, interactivePoints, selectedEvent, threatPoints]);
 
   return (
-    <div className="globe-host" ref={containerRef} aria-label="Interactive SGP4-propagated Earth globe">
+    <div className="globe-host" ref={containerRef} data-camera-mode={cameraMode} aria-label="Interactive SGP4-propagated Earth globe">
       <Globe
         ref={globeRef}
         width={size.width}

@@ -7,7 +7,7 @@ import {
   PanelLeftClose, PanelLeftOpen, PanelRightClose, Pause, Play, Plus, RotateCcw,
   RefreshCw, Search, Satellite, ShieldCheck, X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import cdmFixture from './data/esa-validation-event.json';
 import EncounterScene from './encounter-scene';
@@ -22,6 +22,7 @@ import { explainConjunction } from './lib/explanations';
 import { INDIA_EO_FLEET } from './lib/fleet';
 import { relativeRtnFromOmm } from './lib/orbit';
 import { comparePriority, formatProbability } from './lib/screening';
+import type { OrbitCameraMode } from './orbit-globe';
 import type {
   CatalogResponse, CdmSequence, ConjunctionRecord, ConjunctionResponse, DataStatus,
   DebrisSize, OmmRecord, SatelliteMedia, ScreeningPriority, ThreatObject, ThreatResponse,
@@ -30,6 +31,10 @@ import type {
 const OrbitGlobe = dynamic(() => import('./orbit-globe'), {
   ssr: false,
   loading: () => <div className="globe-loading static">Loading WebGL workspace…</div>,
+});
+const EncounterDepthInset = dynamic(() => import('./encounter-depth-inset'), {
+  ssr: false,
+  loading: () => <div className="rtn-unavailable">Loading 3D encounter geometry…</div>,
 });
 
 type ViewMode = 'screening' | 'validation';
@@ -77,18 +82,15 @@ function statusTone(status?: DataStatus) {
   return status === 'current' ? 'current' : status === 'cached' ? 'cached' : 'unavailable';
 }
 
-function PublicRtnInset({ primary, secondary, time, primaryColor, secondaryColor }: { primary?: OmmRecord; secondary?: OmmRecord; time: number; primaryColor: string; secondaryColor: string }) {
+function PublicDepthInset({ primary, secondary, time, primaryColor, secondaryColor }: { primary?: OmmRecord; secondary?: OmmRecord; time: number; primaryColor: string; secondaryColor: string }) {
   const relative = useMemo(() => primary && secondary ? relativeRtnFromOmm(primary, secondary, new Date(time)) : null, [primary, secondary, time]);
   if (!relative) return <div className="rtn-unavailable"><AlertTriangle size={14} /> Encounter geometry unavailable for one or both objects.</div>;
-  const maximum = Math.max(1, Math.abs(relative.r), Math.abs(relative.t));
-  const x = 50 + (relative.t / maximum) * 31;
-  const y = 50 - (relative.r / maximum) * 31;
   return (
     <div className="public-rtn">
-      <div className="public-rtn-head"><span>Magnified R–T–N inset</span><b>Approximate OMM geometry</b></div>
-      <div className="public-rtn-grid"><span className="rtn-r">R</span><span className="rtn-t">T</span><i className="rtn-primary" style={{ background: primaryColor, boxShadow: `0 0 9px ${primaryColor}` }} /><i className="rtn-secondary" style={{ left: `${x}%`, top: `${y}%`, background: secondaryColor, boxShadow: `0 0 9px ${secondaryColor}` }} /></div>
+      <div className="public-rtn-head"><span>Oblique 3D R–T–N encounter</span><b>Depth-aware OMM geometry</b></div>
+      <EncounterDepthInset r={relative.r} t={relative.t} n={relative.n} primaryColor={primaryColor} secondaryColor={secondaryColor} />
       <div className="rtn-values">R {relative.r.toFixed(0)} m · T {relative.t.toFixed(0)} m · N {relative.n.toFixed(0)} m</div>
-      <p>SGP4 positions from current public orbit elements; SOCRATES remains authoritative for the reported closest-approach metrics.</p>
+      <p>The N axis is independently magnified so out-of-plane depth remains visible; exact R, T and N values are printed below. Geometry uses public elements, while SOCRATES remains authoritative.</p>
     </div>
   );
 }
@@ -119,8 +121,8 @@ function ClosestApproachCard({
     <div className="cpa-card-head"><span><Crosshair size={13} /> Closest approach</span><b className={animating ? 'animating' : atTca ? 'ready' : ''}>{animating ? 'Animating to TCA' : atTca ? 'At TCA' : countdown(event.tca, clock)}</b></div>
     <div className="cpa-pair"><strong>{cleanName(event.primaryName)}</strong><i /><strong>{cleanName(event.secondaryName)}</strong></div>
     <div className="cpa-metrics"><span><small>Reported miss range</small><b>{metric(event.rangeKm, 'km')}</b></span><span><small>Relative speed</small><b>{metric(event.relativeSpeedKmS, 'km/s')}</b></span><span><small>Maximum probability</small><b>{formatProbability(event.maximumProbability)}</b></span></div>
-    <PublicRtnInset primary={primary} secondary={secondary} time={simulationTime} primaryColor={primaryColor} secondaryColor={secondaryColor} />
-    <p className="cpa-limit">The white CPA marker is a public-element approximation at the authoritative SOCRATES TCA. The reported metrics above remain the source values.</p>
+    <PublicDepthInset primary={primary} secondary={secondary} time={simulationTime} primaryColor={primaryColor} secondaryColor={secondaryColor} />
+    <p className="cpa-limit">On the globe, colored vertical guides connect each TCA position to Earth and the white line marks the approximated separation. SOCRATES values above remain authoritative.</p>
   </div>;
 }
 
@@ -208,6 +210,7 @@ function SatelliteProfile({
   tcaAnimating,
   source,
   sourceUpdatedAt,
+  collisionOverview,
   onSelectEvent,
   onClearEvent,
 }: {
@@ -224,6 +227,7 @@ function SatelliteProfile({
   tcaAnimating: boolean;
   source?: string;
   sourceUpdatedAt: string | null;
+  collisionOverview?: ReactNode;
   onSelectEvent: (event: ConjunctionRecord) => void;
   onClearEvent: () => void;
 }) {
@@ -244,6 +248,7 @@ function SatelliteProfile({
     <div className="inspector-kicker"><span>{selectedEvent ? 'Collision review' : satelliteObject ? 'Satellite profile' : threat?.objectType === 'R/B' ? 'Rocket body risk object' : 'Debris risk object'}</span><span className={`priority-pill ${priority}`}>{selectedEvent ? priorityLabels[selectedEvent.priority] : satelliteObject ? `${risks.length} candidate${risks.length === 1 ? '' : 's'}` : `${impactedSatellites.length} satellite${impactedSatellites.length === 1 ? '' : 's'} at risk`}</span></div>
     <h1>{name}</h1>
     <div className="pair-line"><span>NORAD {catalogId}</span><i /><span>{threat?.objectType ?? record?.OBJECT_TYPE ?? 'Active payload'}</span></div>
+    {collisionOverview}
 
     {!selectedEvent ? <>
       <div className="satellite-media">
@@ -290,6 +295,8 @@ export default function OrbitScene() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [leftOpen, setLeftOpen] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [cameraMode, setCameraMode] = useState<OrbitCameraMode>('global');
+  const [cameraResetKey, setCameraResetKey] = useState(0);
   const [filters, setFilters] = useState<Set<ScreeningPriority>>(new Set(['review', 'watch', 'low', 'needs-data']));
   const [sortMode, setSortMode] = useState<SortMode>('priority');
   const [playing, setPlaying] = useState(true);
@@ -519,9 +526,10 @@ export default function OrbitScene() {
   async function selectEvent(event: ConjunctionRecord) {
     const selectionSequence = ++selectionSequenceRef.current;
     cancelTcaTransition();
-    if (window.matchMedia('(max-width: 720px)').matches) setLeftOpen(false);
+    setLeftOpen(false);
     setSelectedEventId(event.id);
     setInspectorOpen(true);
+    setCatalogueVisible(false);
     setPlaying(false);
     const currentSelectionBelongsToPair = selectedSatelliteId === event.primaryCatalogId || selectedSatelliteId === event.secondaryCatalogId;
     const currentThreat = selectedSatelliteId ? threatsById.get(selectedSatelliteId) : undefined;
@@ -535,6 +543,8 @@ export default function OrbitScene() {
           : event.primaryCatalogId;
     setSelectedSatelliteId(protectedCatalogId);
     setFocusCatalogId(protectedCatalogId);
+    setCameraMode('encounter');
+    setCameraResetKey((value) => value + 1);
     try {
       const ids = [event.primaryCatalogId, event.secondaryCatalogId];
       if (ids.some((id) => !recordMap.has(id))) {
@@ -552,15 +562,18 @@ export default function OrbitScene() {
   function selectSatellite(catalogId: number) {
     selectionSequenceRef.current += 1;
     cancelTcaTransition();
-    if (window.matchMedia('(max-width: 720px)').matches) setLeftOpen(false);
+    setLeftOpen(false);
     if (catalogId !== selectedSatelliteId) {
       setSatelliteMedia(null);
       setMediaLoading(true);
     }
     setSelectedSatelliteId(catalogId);
     setSelectedEventId(null);
+    setCatalogueVisible(false);
     setPreviewId(catalogId);
     setFocusCatalogId(catalogId);
+    setCameraMode('follow');
+    setCameraResetKey((value) => value + 1);
     setInspectorOpen(true);
     setMode('screening');
   }
@@ -569,7 +582,12 @@ export default function OrbitScene() {
     selectionSequenceRef.current += 1;
     cancelTcaTransition();
     setSelectedEventId(null);
-    if (selectedSatelliteId) setFocusCatalogId(selectedSatelliteId);
+    setCatalogueVisible(false);
+    if (selectedSatelliteId) {
+      setFocusCatalogId(selectedSatelliteId);
+      setCameraMode('follow');
+      setCameraResetKey((value) => value + 1);
+    }
   }
 
   function returnToLive() {
@@ -587,7 +605,11 @@ export default function OrbitScene() {
     setMode('screening');
     const highest = [...(conjunctions?.events ?? [])].sort(comparePriority)[0];
     if (highest) void selectEvent(highest);
-    setFocusCatalogId(INDIA_EO_FLEET.objects[0].catalogId);
+    else {
+      setFocusCatalogId(INDIA_EO_FLEET.objects[0].catalogId);
+      setCameraMode('follow');
+      setCameraResetKey((value) => value + 1);
+    }
   }
 
   function preview(record: OmmRecord) {
@@ -602,6 +624,12 @@ export default function OrbitScene() {
       if (next.has(priority)) next.delete(priority); else next.add(priority);
       return next;
     });
+  }
+
+  function chooseCameraMode(mode: OrbitCameraMode) {
+    setCameraMode(mode);
+    if (mode === 'global') setCatalogueVisible(true);
+    setCameraResetKey((value) => value + 1);
   }
 
   const sliderTca = selectedEvent ? new Date(selectedEvent.tca).getTime() : clock + 90 * 60_000;
@@ -648,16 +676,16 @@ export default function OrbitScene() {
         </aside>}
 
         <section className="visual-workspace">
-          {mode === 'screening' ? <OrbitGlobe catalogue={catalog?.objects ?? []} focusRecords={focusRecords} threats={threats?.objects ?? []} fleetIds={watchlist} selectedEvent={selectedEvent} selectedSatelliteId={selectedSatelliteId} previewId={previewId} focusCatalogId={focusCatalogId} simulationTime={simulationTime} showCatalogue={catalogueVisible} onObjectSelect={selectSatellite} /> : <EncounterScene point={revealed ? validation.recordedOutcome : baseline} />}
-          <div className="scene-topline"><div><span>{mode === 'screening' ? 'Global orbital context · select a red satellite or size-colored debris dot' : `ESA held-out event ${validation.eventId}`}</span><strong>{mode === 'screening' ? `${catalog?.count.toLocaleString() ?? '—'} red satellite dots · ${watchlist.length} persistent watchlist orbits · ${debrisTotal} debris objects` : 'R–T–N encounter frame · absolute Earth position unavailable'}</strong>{mode === 'screening' ? <small className={`live-feed-line ${statusTone(threats?.status)}`} aria-live="polite"><i />{dataLabel(threats?.status)} feed · refreshed {lastLiveRefresh ? dateUtc(new Date(lastLiveRefresh).toISOString()) : 'loading'}</small> : null}</div>{mode === 'screening' && <div className="scene-actions"><button className={`refresh-button ${dataRefreshing ? 'refreshing' : ''}`} onClick={() => void refreshScreeningData(true)} disabled={dataRefreshing}><RefreshCw size={14} />{dataRefreshing ? 'Refreshing…' : 'Refresh live data'}</button><button onClick={() => setCatalogueVisible((value) => !value)}>{catalogueVisible ? <Eye size={14} /> : <EyeOff size={14} />}{catalogueVisible ? 'Catalogue visible' : 'Catalogue hidden'}</button></div>}</div>
-          {mode === 'screening' && <div className="debris-legend"><div><span>Debris size · radar cross section</span><b>{debrisTotal} objects</b></div><span className="satellite-key"><i /><strong>All satellites</strong><b>red dots</b></span>{(['small', 'medium', 'large', 'unknown'] as DebrisSize[]).map((size) => <span key={size}><i style={{ background: debrisColors[size] }} /><strong>{debrisLabels[size]}</strong><b>{debrisCounts[size]}</b></span>)}</div>}
+          {mode === 'screening' ? <OrbitGlobe catalogue={catalog?.objects ?? []} focusRecords={focusRecords} threats={threats?.objects ?? []} fleetIds={watchlist} selectedEvent={selectedEvent} selectedSatelliteId={selectedSatelliteId} cameraMode={cameraMode} cameraResetKey={cameraResetKey} previewId={previewId} focusCatalogId={focusCatalogId} simulationTime={simulationTime} showCatalogue={catalogueVisible} onObjectSelect={selectSatellite} /> : <EncounterScene point={revealed ? validation.recordedOutcome : baseline} />}
+          <div className={`scene-topline ${selectedSatelliteId ? 'focused' : ''}`}><div><span>{mode === 'validation' ? `ESA held-out event ${validation.eventId}` : selectedEvent ? 'Focused collision review · unrelated risk markers hidden' : selectedSatelliteName ? 'Satellite follow view · unrelated markers hidden' : 'Global orbital context'}</span><strong>{mode === 'validation' ? 'R–T–N encounter frame · absolute Earth position unavailable' : selectedEvent ? `${cleanName(selectedEvent.primaryName)} ↔ ${cleanName(selectedEvent.secondaryName)}` : selectedSatelliteName ? `${selectedSatelliteName} · use Follow or Free 3D camera` : `${catalog?.count.toLocaleString() ?? '—'} bright-green satellites · select one to follow`}</strong>{mode === 'screening' ? selectedEvent ? <small className="focus-feed-line">Solid green = selected satellite · dashed color = counterpart · white = closest approach</small> : selectedSatelliteName ? <small className="focus-feed-line">Follow locks the moving object · Free 3D keeps the current scene but unlocks pan and orbit</small> : <small className={`live-feed-line ${statusTone(threats?.status)}`} aria-live="polite"><i />{dataLabel(threats?.status)} feed · refreshed {lastLiveRefresh ? dateUtc(new Date(lastLiveRefresh).toISOString()) : 'loading'}</small> : null}</div>{mode === 'screening' && !selectedSatelliteId && <div className="scene-actions"><button className={`refresh-button ${dataRefreshing ? 'refreshing' : ''}`} onClick={() => void refreshScreeningData(true)} disabled={dataRefreshing}><RefreshCw size={14} />{dataRefreshing ? 'Refreshing…' : 'Refresh live data'}</button><button onClick={() => setCatalogueVisible((value) => !value)}>{catalogueVisible ? <Eye size={14} /> : <EyeOff size={14} />}{catalogueVisible ? 'Catalogue visible' : 'Catalogue hidden'}</button></div>}</div>
+          {mode === 'screening' && <div className="camera-toolbar" role="toolbar" aria-label="3D camera controls"><div className="camera-toolbar-label"><strong>3D camera</strong><small>{cameraMode === 'free' ? 'Drag to orbit · right-drag or Shift-drag to pan · wheel/pinch to zoom' : cameraMode === 'follow' ? 'Tracking the selected satellite while you orbit around it' : cameraMode === 'encounter' ? 'Centered on the closest-approach geometry; switch to Free 3D to translate anywhere' : 'Earth overview'}</small></div><div className="camera-toolbar-actions"><button className={cameraMode === 'follow' ? 'active' : ''} onClick={() => chooseCameraMode('follow')} disabled={!selectedSatelliteId}><Satellite size={14} /> Follow</button><button className={cameraMode === 'encounter' ? 'active' : ''} onClick={() => chooseCameraMode('encounter')} disabled={!selectedEvent}><Crosshair size={14} /> Encounter</button><button className={cameraMode === 'free' ? 'active' : ''} onClick={() => chooseCameraMode('free')}><Eye size={14} /> Free 3D</button><button onClick={() => chooseCameraMode('global')}><RotateCcw size={14} /> Reset</button>{selectedSatelliteId ? <button onClick={() => setCatalogueVisible((value) => !value)}>{catalogueVisible ? <EyeOff size={14} /> : <Eye size={14} />}{catalogueVisible ? 'Hide context' : 'Show context'}</button> : null}</div></div>}
+          {mode === 'screening' && !selectedSatelliteId && <div className="debris-legend"><div><span>Debris size · radar cross section</span><b>{debrisTotal} objects</b></div><span className="satellite-key"><i /><strong>All satellites</strong><b>bright green</b></span>{(['small', 'medium', 'large', 'unknown'] as DebrisSize[]).map((size) => <span key={size}><i style={{ background: debrisColors[size] }} /><strong>{debrisLabels[size]}</strong><b>{debrisCounts[size]}</b></span>)}</div>}
           {mode === 'screening' && !fleetActive && <button className="floating-fleet-action" onClick={activateFleet}><Satellite size={18} /><span><strong>Focus India Earth Observation Fleet</strong><small>Open the current screening queue</small></span></button>}
-          {mode === 'screening' && selectedEvent && <div className="floating-rtn"><ClosestApproachCard event={selectedEvent} primary={selectedPrimary} secondary={selectedSecondary} simulationTime={simulationTime} clock={clock} animating={tcaAnimating} threatsById={threatsById} /></div>}
           {mode === 'validation' && <div className="validation-overlay"><span>{revealed ? 'Recorded final message' : 'Visible evidence at T−2 cutoff'}</span><strong>log₁₀ risk {revealed ? validation.recordedOutcome.risk?.toFixed(4) : baseline.risk?.toFixed(4)}</strong><small>Miss distance {metric(revealed ? validation.recordedOutcome.miss_distance : baseline.miss_distance, 'm', 0)}</small></div>}
         </section>
 
         {inspectorOpen && <aside className="event-inspector"><button className="inspector-close" onClick={() => setInspectorOpen(false)} aria-label="Close inspector"><PanelRightClose size={16} /></button>
-          {mode === 'screening' ? selectedSatelliteId && selectedSatelliteName ? <SatelliteProfile catalogId={selectedSatelliteId} name={selectedSatelliteName} record={selectedSatellite} threat={selectedThreat} risks={selectedSatelliteRisks} threatsById={threatsById} selectedEvent={selectedEvent} media={satelliteMedia} mediaLoading={mediaLoading} clock={clock} tcaAnimating={tcaAnimating} source={conjunctions?.source} sourceUpdatedAt={conjunctions?.sourceUpdatedAt ?? null} onSelectEvent={(event) => void selectEvent(event)} onClearEvent={clearSelectedEvent} /> : <div className="inspector-empty"><Crosshair size={25} /><h2>Select any satellite</h2><p>Click any red satellite dot or use search to open its mission image and choose one collision candidate for a focused TCA review.</p></div> : <>
+          {mode === 'screening' ? selectedSatelliteId && selectedSatelliteName ? <SatelliteProfile catalogId={selectedSatelliteId} name={selectedSatelliteName} record={selectedSatellite} threat={selectedThreat} risks={selectedSatelliteRisks} threatsById={threatsById} selectedEvent={selectedEvent} media={satelliteMedia} mediaLoading={mediaLoading} clock={clock} tcaAnimating={tcaAnimating} source={conjunctions?.source} sourceUpdatedAt={conjunctions?.sourceUpdatedAt ?? null} collisionOverview={selectedEvent ? <div className="collision-overview"><ClosestApproachCard event={selectedEvent} primary={selectedPrimary} secondary={selectedSecondary} simulationTime={simulationTime} clock={clock} animating={tcaAnimating} threatsById={threatsById} /></div> : null} onSelectEvent={(event) => void selectEvent(event)} onClearEvent={clearSelectedEvent} /> : <div className="inspector-empty"><Crosshair size={25} /><h2>Select any satellite</h2><p>Click any bright-green satellite dot or use search to open its mission image and choose one collision candidate for a focused TCA review.</p></div> : <>
             <div className="inspector-kicker"><span>Validation inspector</span><span className="priority-pill validation">Held out</span></div><h1>ESA event {validation.eventId}</h1><p className="validation-lede">An authentic message sequence from ESA’s Collision Avoidance Challenge, truncated at the T−2 decision cutoff.</p>
             <div className="metric-grid validation-metrics"><div><span>Visible CDMs</span><strong>{validation.visibleCdms.length}</strong></div><div><span>Cutoff</span><strong>T−{validation.cutoffDays} days</strong></div><div><span>Latest-known baseline</span><strong>{baseline.risk?.toFixed(5)}</strong></div><div><span>Relative speed</span><strong>{metric(baseline.relative_speed ? baseline.relative_speed / 1000 : null, 'km/s')}</strong></div></div>
             <section className="model-slot"><span>Phase 2 model integration</span><strong>No forecast inserted</strong><p>Persistence and gradient-boosting baselines, followed by PI-RNet, will be trained and tested event-wise. This slot intentionally contains no representative prediction.</p></section>

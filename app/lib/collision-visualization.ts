@@ -1,6 +1,6 @@
 import type { DebrisSize, ThreatObject } from './types';
 
-export const SATELLITE_COLOR = '#ff5e5e';
+export const SATELLITE_COLOR = '#64ff88';
 
 export const DEBRIS_COLORS: Record<DebrisSize, string> = {
   small: '#a979ff',
@@ -9,7 +9,7 @@ export const DEBRIS_COLORS: Record<DebrisSize, string> = {
   unknown: '#9aa7b0',
 };
 
-export type OrbitVisualRole = 'watchlist' | 'selected-satellite' | 'paired-object' | 'cpa-link';
+export type OrbitVisualRole = 'watchlist' | 'selected-satellite' | 'paired-object' | 'cpa-link' | 'depth-guide';
 
 export type OrbitVisualStyle = {
   color: string;
@@ -46,7 +46,10 @@ export function orbitVisualStyle(role: OrbitVisualRole, pairedColor = DEBRIS_COL
   if (role === 'cpa-link') {
     return { color: '#f4f7f9', stroke: 0.7, dashLength: 0.025, dashGap: 0.015, dashAnimateTime: 900 };
   }
-  return { color: 'rgba(255,94,94,0.28)', stroke: 0.34, dashLength: 0.035, dashGap: 0.03, dashAnimateTime: 7200 };
+  if (role === 'depth-guide') {
+    return { color: pairedColor, stroke: 0.42, dashLength: 0.018, dashGap: 0.015, dashAnimateTime: 0 };
+  }
+  return { color: 'rgba(100,255,136,0.3)', stroke: 0.34, dashLength: 0.035, dashGap: 0.03, dashAnimateTime: 7200 };
 }
 
 export function tcaAnimationFrame(from: number, to: number, elapsed: number, duration: number) {

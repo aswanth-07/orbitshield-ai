@@ -49,7 +49,8 @@ function fakeScheduler() {
 }
 
 describe('collision visualization rules', () => {
-  it('keeps payload markers red and size-colors only non-payload objects', () => {
+  it('keeps payload markers bright green and size-colors only non-payload objects', () => {
+    expect(SATELLITE_COLOR).toBe('#64ff88');
     expect(isSatelliteObjectType('PAY')).toBe(true);
     expect(isSatelliteObjectType('payload')).toBe(true);
     expect(isSatelliteObjectType('DEB')).toBe(false);
@@ -67,16 +68,19 @@ describe('collision visualization rules', () => {
     ])).toEqual({ small: 1, medium: 0, large: 1, unknown: 1 });
   });
 
-  it('uses subdued red watchlist paths and a solid selected satellite path', () => {
+  it('uses subdued green watchlist paths, a solid selected satellite path, and depth guides', () => {
     const watchlist = orbitVisualStyle('watchlist');
     const selected = orbitVisualStyle('selected-satellite');
     const paired = orbitVisualStyle('paired-object', DEBRIS_COLORS.medium);
-    expect(watchlist.color).toContain('255,94,94');
+    const depthGuide = orbitVisualStyle('depth-guide', DEBRIS_COLORS.medium);
+    expect(watchlist.color).toContain('100,255,136');
     expect(selected.color).toBe(SATELLITE_COLOR);
     expect(selected.dashGap).toBe(0);
     expect(selected.stroke).toBeGreaterThan(watchlist.stroke);
     expect(paired.color).toBe(DEBRIS_COLORS.medium);
     expect(paired.dashGap).toBeGreaterThan(0);
+    expect(depthGuide.color).toBe(DEBRIS_COLORS.medium);
+    expect(depthGuide.dashGap).toBeGreaterThan(0);
   });
 });
 

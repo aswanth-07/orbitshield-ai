@@ -195,7 +195,7 @@ export type OrbitPath = {
   catalogId: number;
   name: string;
   color: string;
-  role?: 'watchlist' | 'selected-satellite' | 'paired-object' | 'cpa-link';
+  role?: 'watchlist' | 'selected-satellite' | 'paired-object' | 'cpa-link' | 'depth-guide';
   stroke?: number;
   dashLength?: number;
   dashGap?: number;
