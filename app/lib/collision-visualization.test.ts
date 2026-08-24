@@ -73,12 +73,14 @@ describe('collision visualization rules', () => {
     ])).toEqual({ small: 1, medium: 0, large: 1, unknown: 1 });
   });
 
-  it('uses subdued green watchlist paths, a solid selected satellite path, and depth guides', () => {
+  it('uses visible green watchlist paths, a solid selected satellite path, and depth guides', () => {
     const watchlist = orbitVisualStyle('watchlist');
     const selected = orbitVisualStyle('selected-satellite');
     const paired = orbitVisualStyle('paired-object', DEBRIS_COLORS.medium);
     const depthGuide = orbitVisualStyle('depth-guide', DEBRIS_COLORS.medium);
     expect(watchlist.color).toContain('100,255,136');
+    expect(watchlist.stroke).toBeGreaterThan(0.5);
+    expect(watchlist.dashGap).toBe(0);
     expect(selected.color).toBe(SATELLITE_COLOR);
     expect(selected.dashGap).toBe(0);
     expect(selected.stroke).toBeGreaterThan(watchlist.stroke);

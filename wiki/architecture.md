@@ -11,6 +11,9 @@ status: active
 The application runs on Next.js 16 through Vinext with React 19 and TypeScript.
 Three.js and react-globe.gl render the Earth and encounter layers. satellite.js
 propagates OMM records in a worker so catalogue updates do not block the UI.
+Prepared SGP4 records avoid reparsing orbital elements for every path sample or
+catalogue refresh. The layout preloads the bundled Earth texture so the globe
+does not wait for a second network discovery step.
 
 `app/lib/types.ts` defines the shared contracts for catalogue status,
 conjunctions, threats, explanations, CDM sequences, and orbit paths. API routes
@@ -22,6 +25,14 @@ left rail derives monitored-satellite state and the automatic alert queue. The
 centre keeps the active catalogue, screened debris, monitored orbits and TCA
 replay in one WebGL scene. The right rail renders the grounded alert explanation,
 verified metrics, model coverage and analyst workflow.
+
+The replay samples the selected pair on a bounded interface cadence and lets the
+globe camera interpolate between those verified SGP4 states. Monitored
+background objects, screened debris and the optional full catalogue use
+separate slower time buckets. Prepared SGP4 records and cached Three.js marker
+geometry avoid repeated parsing and allocation. The worker allows one catalogue
+propagation in flight and retains only the newest queued time, which prevents
+replay requests from building a backlog.
 
 ## Public screening lane
 
@@ -39,11 +50,14 @@ the final two-day interval, engineers temporal and covariance features, and
 keeps events separate across train, validation, and test partitions. Event
 9051 remains reserved for the judge replay.
 
-Latest-risk persistence is the safety baseline. The current LightGBM model
-provides a secondary high-risk triage signal. A neural challenger was not
-adopted because it did not improve held-out validation. The UI identifies the
-input coverage, validation evidence and calibration limit. A public event stays
-in an `Awaiting CDM` state until a compatible operator history is connected.
+Latest-risk persistence is the safety baseline. The benchmark trains Logistic
+Regression, Random Forest, Histogram Gradient Boosting, LightGBM and a
+Multi-Layer Perceptron on the same event-held-out split. Histogram Gradient
+Boosting leads validation F2 at 0.859 and reaches 0.846 test F2. LightGBM reaches
+the highest model test PR-AUC at 0.856. The MLP does not improve the benchmark.
+The UI identifies input coverage, validation evidence and calibration limits. A
+public event stays in an `Awaiting CDM` state until a compatible operator
+history is connected.
 
 The accelerated TCA replay uses a fixed twenty-minute window and a 6.5-second
 presentation duration. Camera phases follow the protected object, acquire the

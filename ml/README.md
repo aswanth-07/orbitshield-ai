@@ -27,3 +27,14 @@ The exporter verifies that event `9051` stayed outside every model partition,
 runs the saved model, and writes a small source-labelled result to
 `app/data/esa-validation-replay.json`. The frontend labels the classifier output
 as an uncalibrated triage score rather than a collision probability.
+
+Run the five-family benchmark from the repository root:
+
+```powershell
+.\.venv-ml\Scripts\python.exe .\ml\benchmark_models.py
+```
+
+The benchmark trains Logistic Regression, Random Forest, Histogram Gradient
+Boosting, LightGBM and a Multi-Layer Perceptron on the same event-held-out T-2
+split. Validation F2 selects thresholds and the benchmark champion. The compact
+research basis is recorded in `ml/literature-survey.md`.

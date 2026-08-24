@@ -10,22 +10,34 @@ import type { OmmRecord, OrbitPath, PropagatedObject } from './types';
 
 const EARTH_RADIUS_KM = 6371;
 
+export type PreparedOmm = {
+  record: OmmRecord;
+  satrec: ReturnType<typeof json2satrec>;
+};
+
 export function catalogId(record: OmmRecord) {
   return Number(record.NORAD_CAT_ID);
 }
 
-export function propagateOmm(record: OmmRecord, date: Date): PropagatedObject | null {
+export function prepareOmm(record: OmmRecord): PreparedOmm | null {
   try {
-    const satrec = json2satrec(record as Parameters<typeof json2satrec>[0]);
-    const state = propagate(satrec, date);
+    return { record, satrec: json2satrec(record as Parameters<typeof json2satrec>[0]) };
+  } catch {
+    return null;
+  }
+}
+
+export function propagatePreparedOmm(prepared: PreparedOmm, date: Date): PropagatedObject | null {
+  try {
+    const state = propagate(prepared.satrec, date);
     if (!state || !state.position || typeof state.position === 'boolean') return null;
     const geodetic = eciToGeodetic(state.position, gstime(date));
     const altitudeKm = geodetic.height;
     if (!Number.isFinite(altitudeKm)) return null;
     return {
-      catalogId: catalogId(record),
-      name: record.OBJECT_NAME,
-      epoch: record.EPOCH,
+      catalogId: catalogId(prepared.record),
+      name: prepared.record.OBJECT_NAME,
+      epoch: prepared.record.EPOCH,
       lat: degreesLat(geodetic.latitude),
       lng: degreesLong(geodetic.longitude),
       altitudeKm,
@@ -36,18 +48,24 @@ export function propagateOmm(record: OmmRecord, date: Date): PropagatedObject | 
   }
 }
 
+export function propagateOmm(record: OmmRecord, date: Date): PropagatedObject | null {
+  const prepared = prepareOmm(record);
+  return prepared ? propagatePreparedOmm(prepared, date) : null;
+}
+
 export function sampleOrbitPath(
   record: OmmRecord,
   center: Date,
   color: string,
   samples = 180,
 ): OrbitPath {
+  const prepared = prepareOmm(record);
   const meanMotion = Number(record.MEAN_MOTION);
   const periodMs = Number.isFinite(meanMotion) && meanMotion > 0 ? (86_400_000 / meanMotion) : 5_400_000;
   const start = center.getTime() - periodMs / 2;
   const points = Array.from({ length: samples }, (_, index) => {
     const date = new Date(start + (index / (samples - 1)) * periodMs);
-    return propagateOmm(record, date);
+    return prepared ? propagatePreparedOmm(prepared, date) : null;
   })
     .filter((point): point is PropagatedObject => Boolean(point))
     .map(({ lat, lng, altitude }) => ({ lat, lng, altitude }));

@@ -14,15 +14,16 @@ and a controlled escalation workflow.
 ## Judge workflow
 
 1. The application opens with six monitored satellites, automatic source
-   refresh, and a ranked alert queue.
-2. OrbitShield selects the highest-ranked named debris encounter and keeps the
-   rest of the orbital picture visible for context.
+   refresh, six solid green orbits, and a ranked alert queue.
+2. The judge selects a satellite to follow or an alert to inspect. OrbitShield
+   keeps the rest of the orbital picture visible for context.
 3. The right rail explains what is happening, why the alert fired, the verified
    metrics, the model coverage state, and the next review steps.
 4. Accelerated TCA follow keeps the protected satellite and counterpart visible
    while time advances to closest approach.
-5. Inline model evidence shows the held-out ESA validation result without
-   presenting it as the score for a public SOCRATES event.
+5. Inline model evidence compares five trained families and shows the held-out
+   ESA validation result without presenting it as the score for a public
+   SOCRATES event.
 
 ## Customer and value
 

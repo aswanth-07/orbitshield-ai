@@ -49,7 +49,7 @@ export function orbitVisualStyle(role: OrbitVisualRole, pairedColor = DEBRIS_COL
   if (role === 'depth-guide') {
     return { color: pairedColor, stroke: 0.42, dashLength: 0.018, dashGap: 0.015, dashAnimateTime: 0 };
   }
-  return { color: 'rgba(100,255,136,0.3)', stroke: 0.34, dashLength: 0.035, dashGap: 0.03, dashAnimateTime: 7200 };
+  return { color: 'rgba(100,255,136,0.72)', stroke: 0.62, dashLength: 1, dashGap: 0, dashAnimateTime: 0 };
 }
 
 export function tcaAnimationFrame(from: number, to: number, elapsed: number, duration: number) {

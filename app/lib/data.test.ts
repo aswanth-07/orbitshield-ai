@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import snapshot from '../data/active-catalog.snapshot.json';
 import replayFixture from '../data/esa-validation-replay.json';
+import benchmarkFixture from '../data/model-benchmark.json';
 import { debrisSizeFromRcs, getCatalog, normalizeOmm, parseSocratesCsv } from './server-data';
-import { propagateOmm } from './orbit';
+import { prepareOmm, propagateOmm, propagatePreparedOmm } from './orbit';
 import { propagateCatalogue } from '../workers/propagation.worker';
-import type { OmmRecord, T2ModelReplay } from './types';
+import type { ModelBenchmark, OmmRecord, T2ModelReplay } from './types';
 
 const replay = replayFixture as T2ModelReplay;
+const benchmark = benchmarkFixture as ModelBenchmark;
 
 describe('data normalization and propagation', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -27,6 +29,9 @@ describe('data normalization and propagation', () => {
     expect(point!.lat).toBeLessThanOrEqual(90);
     expect(point!.altitudeKm).toBeGreaterThan(100);
     expect(propagateCatalogue([record], atEpoch.getTime())).toHaveLength(1);
+    const prepared = prepareOmm(record);
+    expect(prepared).not.toBeNull();
+    expect(propagatePreparedOmm(prepared!, atEpoch)).toEqual(point);
   });
 
   it('normalizes a fleet SOCRATES row and applies screening rules', () => {
@@ -66,5 +71,16 @@ describe('data normalization and propagation', () => {
     expect(replay.calibration.displayWarning.toLowerCase()).toContain('not collision probability');
     expect(replay.inference.residualAlpha).toBe(0);
     expect(replay.recordedOutcome.probabilityRatioToBaseline).toBeGreaterThan(1);
+  });
+
+  it('ships five real benchmark results selected without test leakage', () => {
+    expect(benchmark.models).toHaveLength(5);
+    expect(benchmark.dataset.reservedEventExcluded).toBe(true);
+    expect(benchmark.dataset.reservedEventId).toBe(9051);
+    const champion = benchmark.models.find((model) => model.id === benchmark.championModelId);
+    expect(champion).toBeDefined();
+    expect(champion!.validation.f2).toBe(Math.max(...benchmark.models.map((model) => model.validation.f2)));
+    expect(benchmark.selectionPolicy.toLowerCase()).toContain('validation f2');
+    expect(benchmark.limitations.join(' ').toLowerCase()).toContain('not calibrated collision probabilities');
   });
 });

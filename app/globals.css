@@ -766,6 +766,11 @@ details li,
 .ops-layer-legend .sat { background: #64d6c1; box-shadow: 0 0 7px rgba(100,214,193,.5); }
 .ops-layer-legend .debris { background: #f4b85a; }
 .ops-layer-legend .orbit { width: 14px; height: 1px; border-radius: 0; background: #35d7ff; }
+.ops-event-orbit-legend { position: absolute; z-index: 9; top: 52px; right: 14px; display: grid; gap: 6px; padding: 8px 9px; border: 1px solid rgba(42,55,61,.72); border-radius: 6px; background: rgba(7,10,12,.78); color: #89979d; font-size: 8px; backdrop-filter: blur(10px); }
+.ops-event-orbit-legend span { display: flex; align-items: center; gap: 7px; }
+.ops-event-orbit-legend i { width: 20px; height: 0; border-top: 2px solid #64ff88; }
+.ops-event-orbit-legend i.protected { box-shadow: 0 0 6px rgba(100,255,136,.52); }
+.ops-event-orbit-legend i.counterpart { border-top-style: dashed; }
 .ops-globe-controls { position: absolute; z-index: 12; left: 14px; right: 14px; bottom: 15px; min-height: 54px; display: grid; grid-template-columns: auto auto minmax(200px,280px) auto; align-items: center; gap: 9px; padding: 8px; border: 1px solid rgba(45,59,66,.84); border-radius: 9px; background: rgba(7,10,12,.88); box-shadow: 0 16px 45px rgba(0,0,0,.42); backdrop-filter: blur(14px); }
 .ops-time-control, .ops-camera-control { display: flex; align-items: center; gap: 5px; }
 .ops-time-control button, .ops-time-control select, .ops-camera-control button, .ops-live-button { height: 34px; border: 1px solid #29353a; border-radius: 5px; background: #111719; color: #9ba8ae; font-size: 8px; cursor: pointer; }
@@ -774,6 +779,7 @@ details li,
 .ops-time-control > span { display: none; color: #78868d; font: 8px var(--font-geist-mono), monospace; white-space: nowrap; }
 .ops-camera-control button { display: flex; align-items: center; gap: 5px; padding: 0 8px; }
 .ops-camera-control button.active { border-color: #3b6775; color: #65def6; background: rgba(53,215,255,.07); }
+.ops-camera-control button:disabled { opacity: .35; cursor: not-allowed; }
 .ops-tca-button { min-width: 0; height: 42px; display: flex; align-items: center; gap: 9px; padding: 0 12px; border: 1px solid rgba(53,215,255,.46); border-radius: 6px; background: linear-gradient(100deg,rgba(53,215,255,.13),rgba(53,215,255,.04)); color: #69def6; text-align: left; cursor: pointer; }
 .ops-tca-button:disabled { opacity: .7; cursor: wait; }
 .ops-tca-button span { min-width: 0; }
@@ -839,6 +845,16 @@ details li,
 .ops-model-proof { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; margin-top: 9px; }
 .ops-model-proof span { min-width: 0; padding: 7px; border: 1px solid #243238; border-radius: 5px; color: #68767d; font-size: 7px; }
 .ops-model-proof b { display: block; margin-bottom: 3px; color: #58d7f3; font: 600 10px var(--font-geist-mono), monospace; }
+.ops-benchmark-list { display: grid; gap: 4px; margin-top: 9px; }
+.ops-benchmark-list > div { display: grid; grid-template-columns: minmax(0,1fr) 54px 64px; align-items: center; gap: 6px; padding: 7px; border: 1px solid #212b30; border-radius: 5px; background: #0a0e10; }
+.ops-benchmark-list > div.champion { border-color: rgba(80,217,179,.42); background: rgba(80,217,179,.055); }
+.ops-benchmark-list span { min-width: 0; }
+.ops-benchmark-list strong, .ops-benchmark-list small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ops-benchmark-list strong { color: #bdc8cc; font-size: 8px; }
+.ops-benchmark-list .champion strong { color: #6be1c0; }
+.ops-benchmark-list span small { margin-top: 2px; color: #5f6d73; font-size: 6px; }
+.ops-benchmark-list > div > b { color: #cbd6d9; font: 600 9px var(--font-geist-mono), monospace; text-align: right; }
+.ops-benchmark-list > div > b small { margin-top: 2px; color: #536167; font: 5px var(--font-geist-mono), monospace; }
 .ops-action-plan ol { margin: 10px 0 0; padding: 0; list-style: none; }
 .ops-action-plan li { display: grid; grid-template-columns: 24px 1fr; align-items: start; gap: 7px; padding: 7px 0; border-top: 1px solid #1d2529; color: #929fa5; font-size: 9px; line-height: 1.4; }
 .ops-action-plan li:first-child { border-top: 0; }
@@ -853,6 +869,17 @@ details li,
 .ops-no-alert { display: grid; justify-items: center; margin-top: 80px; color: #506068; text-align: center; }
 .ops-no-alert strong { margin-top: 10px; color: #cbd5d8; font-size: 13px; }
 .ops-no-alert p { max-width: 250px; margin: 6px 0 0; color: #718087; font-size: 9px; line-height: 1.5; }
+.ops-monitoring-overview { margin-top: 60px; }
+.ops-monitoring-overview > div { width: 100%; display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-top: 18px; }
+.ops-monitoring-overview > div span { min-width: 0; padding: 9px 6px; border: 1px solid #222d32; border-radius: 6px; background: #0d1214; color: #68767d; font-size: 7px; line-height: 1.35; }
+.ops-monitoring-overview > div b { display: block; margin-bottom: 4px; color: #64ff88; font: 600 12px var(--font-geist-mono), monospace; }
+.ops-benchmark-summary { width: 100%; margin-top: 10px; padding: 12px; border: 1px solid rgba(53,215,255,.28); border-radius: 7px; background: linear-gradient(135deg,rgba(53,215,255,.07),rgba(53,215,255,.018)); text-align: left; }
+.ops-benchmark-summary > span { display: block; color: #5fcfe8; font: 700 7px var(--font-geist-mono), monospace; letter-spacing: .09em; }
+.ops-benchmark-summary > strong { display: block; margin-top: 6px; color: #dce9ec; font-size: 11px; }
+.ops-benchmark-summary > small { display: block; margin-top: 3px; color: #6f7f86; font-size: 7px; }
+.ops-benchmark-summary > div { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; margin-top: 10px; }
+.ops-benchmark-summary > div b { padding: 7px; border: 1px solid #26363d; border-radius: 5px; color: #5cddf7; font: 600 11px var(--font-geist-mono), monospace; text-align: center; }
+.ops-benchmark-summary em { display: block; margin-top: 3px; color: #607078; font: 5px var(--font-geist-mono), monospace; font-style: normal; }
 
 @keyframes ops-pulse { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
 @keyframes ops-spin { to { transform: rotate(360deg); } }
@@ -878,6 +905,7 @@ details li,
   .ops-workspace { grid-template-columns: 250px minmax(420px,1fr); }
   .ops-analysis-rail { position: absolute; z-index: 30; top: 64px; right: 0; bottom: 0; width: 360px; border-left: 1px solid #263137; box-shadow: -20px 0 50px rgba(0,0,0,.5); }
   .ops-layer-legend { display: none; }
+  .ops-event-orbit-legend { top: 12px; }
 }
 
 @media (max-width: 700px) {

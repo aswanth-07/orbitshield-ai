@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-24T18:50:09.375539+00:00",
+  "source": "ESA Collision Avoidance Challenge training archive",
+  "cutoffDays": 2.0,
+  "riskThresholdLog10": -6.0,
+  "selectionPolicy": "Champion selected only by validation F2, then validation PR-AUC and recall.",
+  "dataset": {
+    "raw_rows": 162634,
+    "raw_events": 13154,
+    "events_with_t2": 11942,
+    "high_risk_events": 323,
+    "eventsTrain": 8358,
+    "eventsValidation": 1791,
+    "eventsTest": 1792,
+    "testPositiveEvents": 48,
+    "featureCount": 76,
+    "reservedEventId": 9051,
+    "reservedEventExcluded": true
+  },
+  "persistenceBaseline": {
+    "threshold": -6.0,
+    "f2": 0.8424908424908425,
+    "recall": 0.9583333333333334,
+    "precision": 0.5679012345679012,
+    "pr_auc": 0.5618254846190125
+  },
+  "models": [
+    {
+      "id": "logistic-regression",
+      "name": "Logistic Regression",
+      "family": "Interpretable linear baseline",
+      "reason": "Tests whether the engineered CDM state separates high-risk events without nonlinear complexity.",
+      "training_seconds": 0.06374489999143407,
+      "validation": {
+        "threshold": 0.75,
+        "f2": 0.6191950464396285,
+        "recall": 0.8333333333333334,
+        "precision": 0.3053435114503817,
+        "pr_auc": 0.38056455911930054
+      },
+      "test": {
+        "threshold": 0.75,
+        "f2": 0.6501547987616099,
+        "recall": 0.875,
+        "precision": 0.32061068702290074,
+        "pr_auc": 0.5461312257586083
+      }
+    },
+    {
+      "id": "random-forest",
+      "name": "Random Forest",
+      "family": "Bagged decision-tree ensemble",
+      "reason": "Captures nonlinear feature interactions and remains stable under mixed scales and outliers.",
+      "training_seconds": 0.9034255000005942,
+      "validation": {
+        "threshold": 0.17,
+        "f2": 0.8303249097472925,
+        "recall": 0.9583333333333334,
+        "precision": 0.5411764705882353,
+        "pr_auc": 0.7798324838006716
+      },
+      "test": {
+        "threshold": 0.17,
+        "f2": 0.800711743772242,
+        "recall": 0.9375,
+        "precision": 0.5056179775280899,
+        "pr_auc": 0.8285551678886757
+      }
+    },
+    {
+      "id": "hist-gradient-boosting",
+      "name": "Histogram Gradient Boosting",
+      "family": "Boosted decision-tree ensemble",
+      "reason": "Provides a strong native tree-boosting comparison without sharing LightGBM's implementation.",
+      "training_seconds": 2.091278100007912,
+      "validation": {
+        "threshold": 0.51,
+        "f2": 0.859375,
+        "recall": 0.9166666666666666,
+        "precision": 0.6875,
+        "pr_auc": 0.8314182424448776
+      },
+      "test": {
+        "threshold": 0.51,
+        "f2": 0.8461538461538461,
+        "recall": 0.9166666666666666,
+        "precision": 0.6470588235294118,
+        "pr_auc": 0.8403366033236687
+      }
+    },
+    {
+      "id": "lightgbm",
+      "name": "LightGBM",
+      "family": "Leaf-wise gradient boosting",
+      "reason": "Matches the existing explainable triage pipeline and handles sparse, nonlinear CDM features efficiently.",
+      "training_seconds": 0.3762795999937225,
+      "validation": {
+        "threshold": 0.34,
+        "f2": 0.8467741935483871,
+        "recall": 0.875,
+        "precision": 0.75,
+        "pr_auc": 0.8141951559694565
+      },
+      "test": {
+        "threshold": 0.34,
+        "f2": 0.8269230769230769,
+        "recall": 0.8958333333333334,
+        "precision": 0.6323529411764706,
+        "pr_auc": 0.8556202166405111
+      }
+    },
+    {
+      "id": "mlp",
+      "name": "Multi-Layer Perceptron",
+      "family": "Feed-forward neural network",
+      "reason": "Tests a neural representation of the same leakage-safe T-2 feature set.",
+      "training_seconds": 0.7128235000127461,
+      "validation": {
+        "threshold": 0.7719629670506845,
+        "f2": 0.6331168831168831,
+        "recall": 0.8125,
+        "precision": 0.33620689655172414,
+        "pr_auc": 0.4430981497867954
+      },
+      "test": {
+        "threshold": 0.7719629670506845,
+        "f2": 0.5451713395638629,
+        "recall": 0.7291666666666666,
+        "precision": 0.2713178294573643,
+        "pr_auc": 0.4904382037993786
+      }
+    }
+  ],
+  "championModelId": "hist-gradient-boosting",
+  "championModelName": "Histogram Gradient Boosting",
+  "totalTrainingSeconds": 16.14961629998288,
+  "literature": [
+    {
+      "title": "Spacecraft Collision Avoidance Challenge: design and results",
+      "url": "https://arxiv.org/abs/2008.03069",
+      "finding": "Defines the real CDM sequence prediction problem and documents the challenge results."
+    },
+    {
+      "title": "ESA Collision Avoidance Challenge data",
+      "url": "https://kelvins.esa.int/collision-avoidance-challenge/data/",
+      "finding": "Provides 162,634 CDMs, 13,154 events, 103 fields and the operational T-2 cutoff."
+    },
+    {
+      "title": "Implementation and comparison of data-based methods",
+      "url": "https://conference.sdo.esoc.esa.int/proceedings/sdc8/paper/33",
+      "finding": "Compares Random Forest, Gradient Boosting, MLP and LSTM approaches for conjunction data."
+    },
+    {
+      "title": "Bayesian machine learning for satellite collision risk",
+      "url": "https://arxiv.org/abs/2311.10633",
+      "finding": "Reports the strength of naive persistence and studies sequential probabilistic modelling."
+    }
+  ],
+  "limitations": [
+    "The benchmark predicts final high-risk class from ESA CDM histories available at T-2.",
+    "Scores are not calibrated collision probabilities.",
+    "Public SOCRATES events do not contain the complete model feature set."
+  ]
+}

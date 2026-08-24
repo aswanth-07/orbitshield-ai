@@ -256,6 +256,53 @@ export type T2ModelReplay = {
   limitations: string[];
 };
 
+export type ModelBenchmarkMetrics = {
+  threshold: number;
+  f2: number;
+  recall: number;
+  precision: number;
+  pr_auc: number;
+};
+
+export type ModelBenchmarkResult = {
+  id: string;
+  name: string;
+  family: string;
+  reason: string;
+  training_seconds: number;
+  validation: ModelBenchmarkMetrics;
+  test: ModelBenchmarkMetrics;
+};
+
+export type ModelBenchmark = {
+  schemaVersion: 1;
+  generatedAt: string;
+  source: string;
+  cutoffDays: number;
+  riskThresholdLog10: number;
+  selectionPolicy: string;
+  dataset: {
+    raw_rows: number;
+    raw_events: number;
+    events_with_t2: number;
+    high_risk_events: number;
+    eventsTrain: number;
+    eventsValidation: number;
+    eventsTest: number;
+    testPositiveEvents: number;
+    featureCount: number;
+    reservedEventId: number;
+    reservedEventExcluded: boolean;
+  };
+  persistenceBaseline: ModelBenchmarkMetrics;
+  models: ModelBenchmarkResult[];
+  championModelId: string;
+  championModelName: string;
+  totalTrainingSeconds: number;
+  literature: Array<{ title: string; url: string; finding: string }>;
+  limitations: string[];
+};
+
 export type OrbitPath = {
   catalogId: number;
   name: string;

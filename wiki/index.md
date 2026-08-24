@@ -31,4 +31,6 @@ and an ESA CDM model pipeline.
 - `product.md`: judge workflow, customer problem, value, and hackathon scope.
 - `architecture.md`: data lanes, model boundaries, interfaces, and offline
   behavior.
+- `model-benchmark.md`: literature basis, five trained models, metrics and
+  selection policy.
 - `verification.md`: supported runtimes and checks for each change class.

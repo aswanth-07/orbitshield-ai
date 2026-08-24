@@ -3,24 +3,25 @@
 import dynamic from 'next/dynamic';
 import {
   Activity, AlertTriangle, Bot, CheckCircle2, ChevronDown, CircleDot, Clock3,
-  Crosshair, Database, Eye, Gauge, LocateFixed, Pause, Play, Radar, RefreshCw,
+  Crosshair, Database, Eye, LocateFixed, Pause, Play, Radar, RefreshCw,
   RotateCcw, Satellite, ShieldCheck, Sparkles, TriangleAlert,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import replayFixture from './data/esa-validation-replay.json';
+import benchmarkFixture from './data/model-benchmark.json';
 import {
-  animateTcaReplay, isSatelliteObjectType,
+  animateTcaReplay, isSatelliteObjectType, objectMarkerColor,
   TCA_REPLAY_DURATION_MS, tcaReplayStart, type TcaReplayPhase,
 } from './lib/collision-visualization';
 import { explainConjunction } from './lib/explanations';
 import { INDIA_EO_FLEET } from './lib/fleet';
-import { eventForSatellite, highestFleetDebrisAlert, monitoredState, priorityReason } from './lib/monitoring';
+import { eventForSatellite, monitoredState, priorityReason } from './lib/monitoring';
 import { comparePriority, formatProbability } from './lib/screening';
 import type { OrbitCameraMode } from './orbit-globe';
 import type {
   CatalogResponse, ConjunctionRecord, ConjunctionResponse, DataStatus, OmmRecord,
-  ScreeningPriority, T2ModelReplay, ThreatObject, ThreatResponse,
+  ModelBenchmark, ScreeningPriority, T2ModelReplay, ThreatObject, ThreatResponse,
 } from './lib/types';
 
 const OrbitGlobe = dynamic(() => import('./orbit-globe'), {
@@ -29,6 +30,8 @@ const OrbitGlobe = dynamic(() => import('./orbit-globe'), {
 });
 
 const modelReplay = replayFixture as T2ModelReplay;
+const modelBenchmark = benchmarkFixture as ModelBenchmark;
+const benchmarkChampion = modelBenchmark.models.find((model) => model.id === modelBenchmark.championModelId)!;
 const fleetIds = INDIA_EO_FLEET.objects.map((item) => item.catalogId);
 const priorityLabels: Record<ScreeningPriority, string> = {
   review: 'Review', watch: 'Watch', low: 'Low', 'needs-data': 'Needs data',
@@ -101,7 +104,7 @@ export default function OperationsWorkspace() {
   const [threats, setThreats] = useState<ThreatResponse | null>(null);
   const [extraRecords, setExtraRecords] = useState<OmmRecord[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [selectedSatelliteId, setSelectedSatelliteId] = useState<number>(fleetIds[0]);
+  const [selectedSatelliteId, setSelectedSatelliteId] = useState<number | null>(null);
   const [simulationTime, setSimulationTime] = useState(0);
   const [clock, setClock] = useState(0);
   const [playing, setPlaying] = useState(true);
@@ -113,10 +116,12 @@ export default function OperationsWorkspace() {
   const [replayActive, setReplayActive] = useState(false);
   const [replayPhase, setReplayPhase] = useState<TcaReplayPhase | null>(null);
   const [replaySpeed, setReplaySpeed] = useState(0);
+  const [catalogueVisible, setCatalogueVisible] = useState(false);
   const simulationRef = useRef(0);
   const lastTick = useRef(0);
   const replayCancel = useRef<(() => void) | null>(null);
-  const automaticSelectionDone = useRef(false);
+  const replayLastCommitRef = useRef(0);
+  const replayPhaseRef = useRef<TcaReplayPhase | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -223,25 +228,15 @@ export default function OperationsWorkspace() {
     }
   }, [chooseProtectedId, recordMap]);
 
-  useEffect(() => {
-    if (automaticSelectionDone.current || !rankedEvents.length || !threats) return;
-    const debrisEvent = highestFleetDebrisAlert(rankedEvents, fleetIds, threatsById);
-    if (!debrisEvent) return;
-    const timer = window.setTimeout(() => {
-      automaticSelectionDone.current = true;
-      void selectEvent(debrisEvent);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [rankedEvents, selectEvent, threats, threatsById]);
-
   const selectedEvent = useMemo(
     () => rankedEvents.find((event) => event.id === selectedEventId) ?? null,
     [rankedEvents, selectedEventId],
   );
 
-  const selectedCounterpart = selectedEvent ? counterpartFor(selectedEvent, selectedSatelliteId) : null;
+  const selectedProtectedId = selectedEvent ? selectedSatelliteId ?? chooseProtectedId(selectedEvent) : selectedSatelliteId;
+  const selectedCounterpart = selectedEvent && selectedProtectedId ? counterpartFor(selectedEvent, selectedProtectedId) : null;
   const selectedThreat = selectedCounterpart ? threatsById.get(selectedCounterpart.id) : undefined;
-  const selectedSatellite = INDIA_EO_FLEET.objects.find((item) => item.catalogId === selectedSatelliteId);
+  const selectedSatellite = selectedSatelliteId ? INDIA_EO_FLEET.objects.find((item) => item.catalogId === selectedSatelliteId) : undefined;
   const explanation = selectedEvent ? explainConjunction(selectedEvent) : null;
   const focusRecords = useMemo(() => {
     const ids = new Set([
@@ -257,6 +252,8 @@ export default function OperationsWorkspace() {
     setReplayActive(false);
     setReplayPhase(null);
     setReplaySpeed(0);
+    replayPhaseRef.current = null;
+    replayLastCommitRef.current = 0;
   }, []);
 
   const runTcaReplay = useCallback(() => {
@@ -270,6 +267,8 @@ export default function OperationsWorkspace() {
     setPlaying(false);
     setCameraMode('follow');
     setReplayPhase('follow');
+    replayPhaseRef.current = 'follow';
+    setReplaySpeed((target - from) / TCA_REPLAY_DURATION_MS);
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       simulationRef.current = target;
       setSimulationTime(target);
@@ -289,17 +288,26 @@ export default function OperationsWorkspace() {
       },
       onUpdate: (frame) => {
         simulationRef.current = frame.simulationTime;
+        const frameNow = performance.now();
+        const phaseChanged = replayPhaseRef.current !== frame.phase;
+        if (phaseChanged) {
+          replayPhaseRef.current = frame.phase;
+          setReplayPhase(frame.phase);
+          if (frame.phase === 'acquire') setCameraMode('pair-follow');
+          if (frame.phase === 'encounter') setCameraMode('encounter');
+        }
+        if (!frame.done && !phaseChanged && frameNow - replayLastCommitRef.current < 128) return;
+        replayLastCommitRef.current = frameNow;
         setSimulationTime(frame.simulationTime);
-        setReplayPhase(frame.phase);
-        setReplaySpeed(frame.displayedSpeed);
-        if (frame.phase === 'acquire') setCameraMode('pair-follow');
-        if (frame.phase === 'encounter') setCameraMode('encounter');
       },
       onComplete: () => {
         replayCancel.current = null;
+        simulationRef.current = target;
+        setSimulationTime(target);
         setReplayActive(false);
         setReplaySpeed(0);
         setReplayPhase('encounter');
+        replayPhaseRef.current = 'encounter';
         setCameraMode('encounter');
       },
     });
@@ -308,11 +316,6 @@ export default function OperationsWorkspace() {
   useEffect(() => () => replayCancel.current?.(), []);
 
   function selectFleetSatellite(catalogId: number) {
-    const event = eventForSatellite(rankedEvents, catalogId);
-    if (event) {
-      void selectEvent(event);
-      return;
-    }
     cancelReplay();
     setSelectedEventId(null);
     setSelectedSatelliteId(catalogId);
@@ -344,7 +347,7 @@ export default function OperationsWorkspace() {
     <header className="ops-header">
       <div className="ops-brand"><span className="brand-glyph"><i /></span><div><strong>ORBITSHIELD</strong><small>Automated conjunction monitoring</small></div></div>
       <div className="ops-automation"><Radar size={15} /><span><strong>MONITORING ACTIVE</strong><small>6 satellites · 5-minute refresh</small></span></div>
-      <div className="ops-header-summary"><span><b>{catalog?.count.toLocaleString() ?? 'N/A'}</b> active objects</span><i /><span><b>{threats?.positionedCount ?? 'N/A'}</b> risk objects mapped</span><i /><span><b>{alertCount}</b> alerts</span></div>
+      <div className="ops-header-summary"><span><b>{catalog?.count.toLocaleString() ?? 'N/A'}</b> active objects</span><i /><span><b>{threats?.positionedCount ?? 'N/A'}</b> risk objects mapped</span><i /><span><b>{alertCount}</b> alerts</span><i /><span><b>{modelBenchmark.models.length}</b> models tested</span></div>
       <button className="ops-refresh" onClick={() => void refreshLive(true)} disabled={refreshing}><RefreshCw size={14} className={refreshing ? 'spinning' : ''} />{refreshing ? 'Refreshing' : 'Refresh'}</button>
       <div className={`ops-feed-state ${statusTone(dataStatus)}`}><i /><span><b>{statusLabel(dataStatus)}</b><small>{lastRefresh ? dateUtc(new Date(lastRefresh).toISOString(), true) : 'Connecting'}</small></span></div>
     </header>
@@ -393,9 +396,9 @@ export default function OperationsWorkspace() {
           previewId={null}
           focusCatalogId={selectedSatelliteId}
           simulationTime={simulationTime}
-          showCatalogue
+          showCatalogue={catalogueVisible}
           focusSelectedOnly={false}
-          showFleetLabels
+          showFleetLabels={!replayActive}
           replayPhase={replayPhase}
           replayActive={replayActive}
           onObjectSelect={selectFleetSatellite}
@@ -406,10 +409,11 @@ export default function OperationsWorkspace() {
           <small>{selectedEvent ? `${priorityLabels[selectedEvent.priority]} alert · ${countdown(selectedEvent.tca, simulationTime)}` : 'Select a monitored satellite or alert'}</small>
         </div>
         <div className="ops-layer-legend"><span><i className="sat" /> Monitored satellites</span><span><i className="debris" /> Screened debris</span><span><i className="orbit" /> Propagated orbit</span></div>
-        {selectedEvent && replayPhase === 'encounter' && <EncounterOverlay event={selectedEvent} protectedId={selectedSatelliteId} threat={selectedThreat} />}
+        {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected satellite orbit</span><span><i className="counterpart" style={{ borderColor: objectMarkerColor(selectedThreat?.objectType, selectedThreat?.size) }} /> Counterpart orbit</span></div>}
+        {selectedEvent && selectedProtectedId && replayPhase === 'encounter' && <EncounterOverlay event={selectedEvent} protectedId={selectedProtectedId} threat={selectedThreat} />}
         <div className="ops-globe-controls">
           <div className="ops-time-control"><button onClick={() => { cancelReplay(); setPlaying((value) => !value); }} aria-label={playing ? 'Pause orbital animation' : 'Play orbital animation'}>{playing ? <Pause size={14} /> : <Play size={14} />}</button><select value={speed} onChange={(event) => setSpeed(Number(event.target.value))} aria-label="Orbital animation speed"><option value={1}>1×</option><option value={10}>10×</option><option value={60}>60×</option></select><span>{dateUtc(new Date(simulationTime).toISOString(), true)}</span></div>
-          <div className="ops-camera-control"><button className={cameraMode === 'global' ? 'active' : ''} onClick={() => { setCameraMode('global'); setCameraResetKey((value) => value + 1); }}><RotateCcw size={13} /> Globe</button><button className={cameraMode === 'follow' || cameraMode === 'pair-follow' ? 'active' : ''} onClick={() => { setCameraMode(selectedEvent ? 'pair-follow' : 'follow'); setCameraResetKey((value) => value + 1); }}><LocateFixed size={13} /> Track</button><button className={cameraMode === 'free' ? 'active' : ''} onClick={() => { setCameraMode('free'); setCameraResetKey((value) => value + 1); }}><Eye size={13} /> Free 3D</button></div>
+          <div className="ops-camera-control"><button className={cameraMode === 'global' ? 'active' : ''} onClick={() => { setCameraMode('global'); setCameraResetKey((value) => value + 1); }}><RotateCcw size={13} /> Globe</button><button className={cameraMode === 'follow' || cameraMode === 'pair-follow' ? 'active' : ''} onClick={() => { setCameraMode(selectedEvent ? 'pair-follow' : 'follow'); setCameraResetKey((value) => value + 1); }} disabled={!selectedSatelliteId}><LocateFixed size={13} /> Track</button><button className={cameraMode === 'free' ? 'active' : ''} onClick={() => { setCameraMode('free'); setCameraResetKey((value) => value + 1); }}><Eye size={13} /> Free 3D</button><button className={catalogueVisible ? 'active' : ''} onClick={() => setCatalogueVisible((value) => !value)}><CircleDot size={13} /> Context</button></div>
           <button className="ops-tca-button" onClick={runTcaReplay} disabled={!selectedEvent || replayActive}><Crosshair size={15} /><span><strong>{replayActive ? `${replayPhase === 'follow' ? 'Following satellite' : replayPhase === 'acquire' ? 'Acquiring debris' : 'At closest approach'}` : 'Follow alert to TCA'}</strong><small>{replayActive ? `≈ ${Math.round(replaySpeed)}× accelerated` : '20 minutes in 6.5 seconds'}</small></span></button>
           <button className="ops-live-button" onClick={returnLive}><Clock3 size={13} /> Now</button>
         </div>
@@ -420,7 +424,7 @@ export default function OperationsWorkspace() {
         {selectedEvent && explanation && selectedCounterpart ? <>
           <section className={`ops-current-alert ${selectedEvent.priority}`}>
             <div><span><TriangleAlert size={13} /> AI-ASSISTED ALERT</span><b className={selectedEvent.priority}>{priorityLabels[selectedEvent.priority]}</b></div>
-            <strong>{cleanName(selectedEvent.primaryCatalogId === selectedSatelliteId ? selectedEvent.primaryName : selectedEvent.secondaryName)}</strong>
+            <strong>{cleanName(selectedEvent.primaryCatalogId === selectedProtectedId ? selectedEvent.primaryName : selectedEvent.secondaryName)}</strong>
             <small>Possible conjunction with {cleanName(selectedCounterpart.name)} · NORAD {selectedCounterpart.id}</small>
           </section>
 
@@ -440,8 +444,8 @@ export default function OperationsWorkspace() {
           <section className="ops-model-state">
             <div className="ops-section-label"><span>MODEL COVERAGE</span><b className={modelReady ? 'ready' : 'waiting'}>{modelReady ? 'SCORING' : 'AWAITING CDM'}</b></div>
             <div className="ops-model-flow"><span className="done"><CheckCircle2 size={13} /> Live screening</span><i /><span className="done"><CheckCircle2 size={13} /> Alert explanation</span><i /><span><Database size={13} /> CDM triage</span></div>
-            <p>The close-approach alert is automatic. The trained T−2 model activates when an operator CDM history supplies covariance and uncertainty fields.</p>
-            <details><summary>View trained-model proof <ChevronDown size={13} /></summary><div className="ops-model-proof"><span><b>{modelReplay.evaluation.modelPrAuc.toFixed(3)}</b> held-out PR-AUC</span><span><b>{modelReplay.inference.rawScore.toFixed(3)}</b> event {modelReplay.eventId} score</span><span><b>{modelReplay.evaluation.testEvents.toLocaleString()}</b> test events</span></div><p>These figures validate the CDM triage pipeline. They are not a score for this public SOCRATES event.</p></details>
+            <p>The close-approach alert is automatic. Five trained T−2 models activate when an operator CDM history supplies covariance and uncertainty fields.</p>
+            <details><summary>View five-model benchmark <ChevronDown size={13} /></summary><div className="ops-benchmark-list">{modelBenchmark.models.map((model) => <div key={model.id} className={model.id === modelBenchmark.championModelId ? 'champion' : ''}><span><strong>{model.name}</strong><small>{model.family}</small></span><b>{model.validation.f2.toFixed(3)}<small>VAL F2</small></b><b>{model.test.pr_auc.toFixed(3)}<small>TEST PR-AUC</small></b></div>)}</div><div className="ops-model-proof"><span><b>{modelBenchmark.persistenceBaseline.f2.toFixed(3)}</b> persistence F2</span><span><b>{modelReplay.inference.rawScore.toFixed(3)}</b> held-out replay score</span><span><b>{modelBenchmark.dataset.eventsTest.toLocaleString()}</b> test events</span></div><p>{modelBenchmark.championModelName} leads validation F2. These results validate the CDM triage pipeline and are not a score for this public SOCRATES event.</p></details>
           </section>
 
           <section className="ops-action-plan">
@@ -451,7 +455,7 @@ export default function OperationsWorkspace() {
 
           <button className="ops-primary-action" onClick={runTcaReplay} disabled={replayActive}><Crosshair size={16} /><span><strong>{replayActive ? 'Following the encounter' : 'Visualize this alert'}</strong><small>{replayActive ? `Replay running at about ${Math.round(replaySpeed)}×` : 'Track the satellite and debris to TCA'}</small></span></button>
           <p className="ops-safety-note"><ShieldCheck size={13} /> OrbitShield recommends review steps, never manoeuvres. Qualified mission personnel retain every operational decision.</p>
-        </> : <div className="ops-no-alert"><Gauge size={24} /><strong>No alert selected</strong><p>Select a monitored satellite or risk alert. OrbitShield will keep screening the fleet in the background.</p></div>}
+        </> : <div className="ops-no-alert ops-monitoring-overview"><Radar size={25} /><strong>Fleet monitoring is active</strong><p>Six India Earth Observation satellites are propagating on the globe. Select a satellite to follow its orbit or choose an alert to open the risk analysis.</p><div><span><b>{fleetIds.length}</b> monitored satellites</span><span><b>{alertCount}</b> watch or review alerts</span><span><b>{threats?.positionedCount ?? 0}</b> risk objects mapped</span></div><section className="ops-benchmark-summary"><span>FIVE-MODEL T−2 LAB</span><strong>{modelBenchmark.championModelName}</strong><small>Champion selected on validation F2 · event {modelBenchmark.dataset.reservedEventId} excluded</small><div><b>{benchmarkChampion.validation.f2.toFixed(3)}<em>VAL F2</em></b><b>{benchmarkChampion.test.f2.toFixed(3)}<em>TEST F2</em></b><b>{(benchmarkChampion.test.recall * 100).toFixed(1)}%<em>RECALL</em></b></div></section></div>}
       </aside>
     </section>
   </main>;
