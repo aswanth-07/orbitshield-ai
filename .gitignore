@@ -37,3 +37,9 @@ next-env.d.ts
 /outputs/
 /work/
 *.tsbuildinfo
+
+# local ML environment and generated training artifacts
+/.venv-ml/
+/ml/artifacts/
+__pycache__/
+*.py[cod]
