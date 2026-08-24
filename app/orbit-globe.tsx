@@ -29,6 +29,8 @@ type OrbitGlobeProps = {
   focusCatalogId: number | null;
   simulationTime: number;
   showCatalogue: boolean;
+  focusSelectedOnly?: boolean;
+  showFleetLabels?: boolean;
   replayPhase: TcaReplayPhase | null;
   replayActive: boolean;
   onObjectSelect: (catalogId: number) => void;
@@ -107,6 +109,8 @@ export default function OrbitGlobe({
   focusCatalogId,
   simulationTime,
   showCatalogue,
+  focusSelectedOnly = true,
+  showFleetLabels = false,
   replayPhase,
   replayActive,
   onObjectSelect,
@@ -299,7 +303,7 @@ export default function OrbitGlobe({
   const interactivePoints = useMemo<ScenePoint[]>(() => {
     return focusRecords.flatMap((record) => {
       const catalogId = Number(record.NORAD_CAT_ID);
-      if (selectedEvent && !selectedIds.includes(catalogId)) return [];
+      if (focusSelectedOnly && selectedEvent && !selectedIds.includes(catalogId)) return [];
       if (!selectedEvent && selectedSatelliteId && !showCatalogue && catalogId !== selectedSatelliteId) return [];
       const point = propagateOmm(record, new Date(simulationTime));
       if (!point) return [];
@@ -314,10 +318,10 @@ export default function OrbitGlobe({
         markerKind: 'satellite' as const,
       }];
     });
-  }, [focusRecords, fleetIds, previewId, selectedEvent, selectedIds, selectedSatelliteId, showCatalogue, simulationTime]);
+  }, [focusRecords, fleetIds, focusSelectedOnly, previewId, selectedEvent, selectedIds, selectedSatelliteId, showCatalogue, simulationTime]);
 
   const threatPoints = useMemo<ScenePoint[]>(() => threats.flatMap((threat) => {
-    if (selectedEvent && !selectedIds.includes(threat.catalogId)) return [];
+    if (focusSelectedOnly && selectedEvent && !selectedIds.includes(threat.catalogId)) return [];
     if (!selectedEvent && selectedSatelliteId && !showCatalogue && threat.catalogId !== selectedSatelliteId) return [];
     if (!threat.record) return [];
     const point = propagateOmm(threat.record, new Date(simulationTime));
@@ -334,7 +338,7 @@ export default function OrbitGlobe({
       markerKind: satellite ? 'satellite' as const : 'debris' as const,
       threat,
     }];
-  }), [selectedEvent, selectedIds, selectedSatelliteId, showCatalogue, simulationTime, threats]);
+  }), [focusSelectedOnly, selectedEvent, selectedIds, selectedSatelliteId, showCatalogue, simulationTime, threats]);
 
   const threatIds = useMemo(() => new Set(threatPoints.map((point) => point.catalogId)), [threatPoints]);
   const pairRecords = useMemo(() => {
@@ -390,14 +394,19 @@ export default function OrbitGlobe({
     ],
     [cpaPoint, interactivePoints, showEncounterGeometry, tcaScenePoints, threatIds, threatPoints],
   );
-  const pairLabels = useMemo(() => scenePoints.filter((point) => selectedIds.includes(point.catalogId)).map((point) => ({
+  const pairLabels = useMemo(() => scenePoints.filter((point) => (
+    selectedIds.includes(point.catalogId)
+    || (showFleetLabels && fleetIds.includes(point.catalogId))
+  )).map((point) => ({
     ...point,
-    label: point.markerKind === 'debris'
-      ? `DEBRIS · ${point.name}`
-      : point.catalogId === reviewPair?.protectedCatalogId
-        ? `PROTECTED · ${point.name}`
-        : `COUNTERPART · ${point.name}`,
-  })), [reviewPair, scenePoints, selectedIds]);
+    label: selectedIds.includes(point.catalogId)
+      ? point.markerKind === 'debris'
+        ? `DEBRIS · ${point.name}`
+        : point.catalogId === reviewPair?.protectedCatalogId
+          ? `PROTECTED · ${point.name}`
+          : `COUNTERPART · ${point.name}`
+      : `MONITORED · ${point.name}`,
+  })), [fleetIds, reviewPair, scenePoints, selectedIds, showFleetLabels]);
 
   const orbitPathMinute = selectedEvent
     ? Math.floor(new Date(selectedEvent.tca).getTime() / 60_000)

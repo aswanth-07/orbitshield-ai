@@ -1,6 +1,6 @@
 ---
 title: OrbitShield Architecture
-updated: 2026-08-24
+updated: 2026-08-25
 status: active
 ---
 
@@ -17,12 +17,20 @@ conjunctions, threats, explanations, CDM sequences, and orbit paths. API routes
 under `app/api` expose bootstrap, catalogue, conjunction, threat, and live-data
 responses. Each response labels its data as current, cached, or unavailable.
 
+`app/operations-workspace.tsx` owns the persistent three-part product view. The
+left rail derives monitored-satellite state and the automatic alert queue. The
+centre keeps the active catalogue, screened debris, monitored orbits and TCA
+replay in one WebGL scene. The right rail renders the grounded alert explanation,
+verified metrics, model coverage and analyst workflow.
+
 ## Public screening lane
 
 CelesTrak OMM records provide orbital elements for SGP4 context. SOCRATES
 records provide the displayed public conjunction metrics. Transparent rules
 assign Review, Watch, Low, or Needs data. Public geometry remains approximate,
-and the SOCRATES values remain authoritative for the event card.
+and the SOCRATES values remain authoritative for the event card. These rules
+raise the live close-approach alerts. They do not claim that the CDM model scored
+fields it did not receive.
 
 ## CDM intelligence lane
 
@@ -34,8 +42,8 @@ keeps events separate across train, validation, and test partitions. Event
 Latest-risk persistence is the safety baseline. The current LightGBM model
 provides a secondary high-risk triage signal. A neural challenger was not
 adopted because it did not improve held-out validation. The UI identifies the
-model version, cutoff, input coverage, baseline, raw score, calibration limit,
-grouped evidence, and recorded outcome.
+input coverage, validation evidence and calibration limit. A public event stays
+in an `Awaiting CDM` state until a compatible operator history is connected.
 
 The accelerated TCA replay uses a fixed twenty-minute window and a 6.5-second
 presentation duration. Camera phases follow the protected object, acquire the
@@ -55,5 +63,7 @@ it records a real model run against the reserved event.
 - `DataStatus`: `current`, `cached`, or `unavailable`.
 - `ScreeningPriority`: `review`, `watch`, `low`, or `needs-data`.
 - Public event metrics retain source timestamps and nullable source fields.
+- Public screening alerts and CDM model scores remain distinguishable in every
+  view.
 - Model results never overwrite SOCRATES fields or claim operational authority.
 - The T-2 cutoff and reserved-event identity travel with every replay result.

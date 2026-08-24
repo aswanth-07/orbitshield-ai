@@ -1,13 +1,13 @@
 # OrbitShield AI
 
-OrbitShield is an AI-assisted conjunction-triage workspace for small satellite teams. It turns public screening traffic into one explainable review, follows the protected satellite and debris to closest approach, then demonstrates a trained T−2 triage model on a held-out ESA event.
+OrbitShield is an automated conjunction-monitoring workspace for small satellite teams. It watches a selected fleet, raises close-approach alerts from current public screening, explains the selected risk in plain language, and follows the protected satellite and debris to closest approach on a live 3D globe.
 
-The hackathon demonstration has two evidence lanes:
+The hackathon demonstration keeps two evidence lanes in one persistent product view:
 
-- **Public screening:** CelesTrak OMM context, SOCRATES metrics, transparent Review/Watch/Low rules, and a debris-focused India Earth Observation fleet workflow.
-- **Historical AI replay:** nine ESA CDMs visible through a strict T−2 cutoff, a latest-risk persistence baseline, a trained LightGBM priority signal, grouped evidence, and a recorded-outcome reveal.
+- **Automated public monitoring:** CelesTrak OMM context, SOCRATES metrics, transparent Review/Watch/Low alerts, and six India Earth Observation missions.
+- **CDM model evidence:** an event-held-out LightGBM priority model trained on ESA CDM histories. The interface states when a public event lacks the covariance history required for that model.
 
-The 3D globe uses SGP4-propagated public elements for context. The accelerated follow compresses a 20-minute encounter window into 6.5 seconds and finishes with a clearly labelled magnified schematic. SOCRATES values remain authoritative; conflicting public-element R–T–N geometry is hidden rather than presented as exact.
+The central globe keeps the monitored orbits, active catalogue and screened debris visible. SGP4 propagation animates the orbital picture. The accelerated follow compresses a 20-minute encounter window into 6.5 seconds and finishes with a labelled magnified schematic. SOCRATES values remain authoritative.
 
 ## Run locally
 
@@ -26,4 +26,4 @@ npm run lint
 npm run build
 ```
 
-The model output is a raw triage score, not collision probability. OrbitShield is preliminary decision support: it does not confirm collisions, recommend manoeuvres, or replace a qualified flight-dynamics analyst.
+The model output is a raw triage score, not collision probability. OrbitShield raises prototype monitoring alerts and supports preliminary review. It does not confirm collisions, recommend manoeuvres, or replace a qualified flight-dynamics analyst.

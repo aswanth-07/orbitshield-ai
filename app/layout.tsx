@@ -25,11 +25,11 @@ export async function generateMetadata(): Promise<Metadata> {
       template: '%s | OrbitShield AI',
     },
     description:
-      'A globe-first workspace for public conjunction screening and held-out CDM validation.',
+      'Automated satellite monitoring, explainable conjunction alerts, and accelerated closest-approach visualization.',
     openGraph: {
       type: 'website',
       title: 'OrbitShield AI',
-      description: 'Review public conjunction screening with transparent data provenance.',
+      description: 'Monitor selected satellites, prioritize conjunction alerts, and understand each risk on a live 3D globe.',
       images: [{
         url: socialImage,
         width: 1200,
@@ -40,7 +40,7 @@ export async function generateMetadata(): Promise<Metadata> {
     twitter: {
       card: 'summary_large_image',
       title: 'OrbitShield AI',
-      description: 'Review public conjunction screening with transparent data provenance.',
+      description: 'Automated monitoring and explainable orbital risk alerts on a live 3D globe.',
       images: [socialImage],
     },
   };

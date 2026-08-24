@@ -1,30 +1,28 @@
 ---
 title: OrbitShield Product Direction
-updated: 2026-08-24
+updated: 2026-08-25
 status: active
 ---
 
 # Product direction
 
-OrbitShield helps a small satellite operations team decide which conjunction
-needs human review first. The product converts public screening or connected
-CDM histories into a short priority queue, an evidence brief, and a controlled
-escalation workflow.
+OrbitShield helps a small satellite operations team monitor its fleet and decide
+which conjunction needs human review first. The product converts public
+screening or connected CDM histories into persistent alerts, an evidence brief,
+and a controlled escalation workflow.
 
 ## Judge workflow
 
-1. The opening globe shows current orbital context and one primary action for
-   the India Earth Observation fleet.
-2. Fleet analysis opens the highest-ranked debris encounter and hides
-   unrelated traffic.
-3. Accelerated TCA follow keeps the selected satellite and counterpart visible
+1. The application opens with six monitored satellites, automatic source
+   refresh, and a ranked alert queue.
+2. OrbitShield selects the highest-ranked named debris encounter and keeps the
+   rest of the orbital picture visible for context.
+3. The right rail explains what is happening, why the alert fired, the verified
+   metrics, the model coverage state, and the next review steps.
+4. Accelerated TCA follow keeps the protected satellite and counterpart visible
    while time advances to closest approach.
-4. The event brief presents TCA, miss range, relative speed, maximum
-   probability, priority reasons, and safe review steps.
-5. The AI replay shows a held-out ESA event using only CDMs available at least
-   two days before TCA. It compares the latest-risk baseline with the trained
-   triage signal, explains the grouped model evidence, and reveals the recorded
-   outcome on request.
+5. Inline model evidence shows the held-out ESA validation result without
+   presenting it as the score for a public SOCRATES event.
 
 ## Customer and value
 
@@ -33,13 +31,15 @@ or emerging constellation without a large round-the-clock flight-dynamics
 team. OrbitShield reduces repetitive interpretation, standardizes escalation,
 and preserves a concise evidence trail for specialist review.
 
-The open tier uses public data for context and transparent screening. A future
-professional tier connects private CDMs, model inference, collaboration,
-notifications, and audit history after formal operational validation.
+The open tier uses public data for automated monitoring, context and transparent
+screening. A future professional tier connects private CDMs, model inference,
+grounded language-model narration, notifications and audit history after formal
+operational validation.
 
 ## Hackathon boundary
 
-The hackathon build prioritizes one complete and explainable workflow. Search,
-large watchlists, advanced camera controls, raw fields, and model diagnostics
-remain available through secondary controls. Authentication, autonomous
-manoeuvres, and operational certification remain outside this release.
+The hackathon build prioritizes one persistent and explainable workflow. The
+public screening alert triggers without a private data connection. The trained
+model activates only when a CDM sequence provides its required uncertainty and
+covariance fields. Authentication, autonomous manoeuvres, broad fleet
+administration, and operational certification remain outside this release.

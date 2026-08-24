@@ -1,5 +1,5 @@
-import OrbitScene from './orbit-scene';
+import OperationsWorkspace from './operations-workspace';
 
 export default function Home() {
-  return <OrbitScene />;
+  return <OperationsWorkspace />;
 }

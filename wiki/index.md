@@ -1,16 +1,16 @@
 ---
 title: OrbitShield Wiki
-updated: 2026-08-24
+updated: 2026-08-25
 status: active
 ---
 
 # OrbitShield
 
-OrbitShield is an offline-capable orbital-conjunction triage prototype for the
-Space Technology theme. The current build combines public CelesTrak screening,
-an India Earth Observation fleet workflow, SGP4 globe rendering, focused
-satellite and debris encounters, and an ESA CDM training pipeline. The
-hackathon release adds a held-out T-2 AI replay as the decision-support proof.
+OrbitShield is an offline-capable automated conjunction-monitoring prototype
+for the Space Technology theme. The current build combines public CelesTrak
+screening, a persistent India Earth Observation fleet watch, SGP4 globe
+rendering, explainable risk alerts, accelerated satellite and debris encounters,
+and an ESA CDM model pipeline.
 
 ## Frozen decisions
 
@@ -20,10 +20,11 @@ hackathon release adds a held-out T-2 AI replay as the decision-support proof.
   held-out validation.
 - Event 9051 stays outside every training partition and supplies the judge
   replay.
-- OrbitShield supports preliminary review and analyst escalation. It does not
-  issue operational alerts or manoeuvre instructions.
-- The primary demonstration uses the India Earth Observation fleet and one
-  focused event instead of a broad dashboard tour.
+- OrbitShield raises prototype close-approach alerts for monitored satellites.
+  It does not issue certified collision warnings or manoeuvre instructions.
+- The primary demonstration stays in one monitoring workspace: fleet and alert
+  queue on the left, orbital picture in the centre, and risk analysis on the
+  right.
 
 ## Pages
 
