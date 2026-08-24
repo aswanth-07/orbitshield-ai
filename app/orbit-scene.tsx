@@ -138,6 +138,8 @@ const replayEvents: ReplayEvent[] = [
   },
 ];
 
+const MAX_TIMELINE = 120;
+
 function seededRandom(seed: number) {
   let state = seed >>> 0;
   return () => {
@@ -192,6 +194,46 @@ function createObjects(): OrbitalObject[] {
     raan: 0.48,
     phase: 0.18,
     angularSpeed: 0.042,
+  };
+  objects[92] = {
+    ...objects[92],
+    name: 'CUBESAT-117',
+    kind: 'payload',
+    altitude: 612,
+    inclination: 1.22,
+    raan: 1.64,
+    phase: 2.18,
+    angularSpeed: 0.039,
+  };
+  objects[231] = {
+    ...objects[231],
+    name: 'ROCKET BODY-76',
+    kind: 'rocket',
+    altitude: 621,
+    inclination: 1.2,
+    raan: 1.69,
+    phase: 2.1,
+    angularSpeed: 0.0385,
+  };
+  objects[147] = {
+    ...objects[147],
+    name: 'EARTH-OBS-42',
+    kind: 'payload',
+    altitude: 704,
+    inclination: 1.71,
+    raan: 2.44,
+    phase: 4.06,
+    angularSpeed: 0.036,
+  };
+  objects[388] = {
+    ...objects[388],
+    name: 'DEBRIS-3911',
+    kind: 'debris',
+    altitude: 718,
+    inclination: 1.69,
+    raan: 2.39,
+    phase: 4.14,
+    angularSpeed: 0.0355,
   };
   return objects;
 }
@@ -248,6 +290,7 @@ export default function OrbitScene() {
   const [speed, setSpeed] = useState(10);
   const [timeline, setTimeline] = useState(0);
   const [fps, setFps] = useState(60);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<Record<ObjectKind, boolean>>({
@@ -265,6 +308,17 @@ export default function OrbitScene() {
       `${event.primary} ${event.secondary} ${event.id}`.toLowerCase().includes(needle),
     );
   }, [query]);
+
+  useEffect(() => {
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const syncPreference = () => {
+      setReducedMotion(preference.matches);
+      if (preference.matches) setPlaying(false);
+    };
+    syncPreference();
+    preference.addEventListener('change', syncPreference);
+    return () => preference.removeEventListener('change', syncPreference);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -557,7 +611,9 @@ export default function OrbitScene() {
       const rect = canvas.getBoundingClientRect();
       const delta = Math.min(0.05, (now - lastFrame) / 1000);
       lastFrame = now;
-      if (playing) timeRef.current += delta * speed;
+      if (playing) {
+        timeRef.current = (timeRef.current + delta * speed) % MAX_TIMELINE;
+      }
       drawStars(rect.width, rect.height, now);
       if (mode === 'monitor') drawMonitor(rect.width, rect.height, timeRef.current);
       else drawReplay(rect.width, rect.height, timeRef.current);
@@ -590,6 +646,7 @@ export default function OrbitScene() {
   };
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (mode !== 'monitor') return;
     dragRef.current = { active: true, x: event.clientX, y: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -612,8 +669,29 @@ export default function OrbitScene() {
   };
 
   const setTimelineValue = (value: number) => {
-    timeRef.current = value;
-    setTimeline(value);
+    const nextValue = Math.max(0, Math.min(MAX_TIMELINE, value));
+    timeRef.current = nextValue;
+    setTimeline(nextValue);
+  };
+
+  const handleCanvasKeyDown = (event: React.KeyboardEvent<HTMLCanvasElement>) => {
+    if (mode !== 'monitor') return;
+    const rotationStep = 0.1;
+    if (event.key === 'ArrowLeft') rotationRef.current.yaw -= rotationStep;
+    else if (event.key === 'ArrowRight') rotationRef.current.yaw += rotationStep;
+    else if (event.key === 'ArrowUp') {
+      rotationRef.current.pitch = Math.max(-1.1, rotationRef.current.pitch - rotationStep);
+    } else if (event.key === 'ArrowDown') {
+      rotationRef.current.pitch = Math.min(1.1, rotationRef.current.pitch + rotationStep);
+    } else if (event.key === '+' || event.key === '=') {
+      zoomRef.current = Math.min(1.34, zoomRef.current + 0.06);
+    } else if (event.key === '-' || event.key === '_') {
+      zoomRef.current = Math.max(0.78, zoomRef.current - 0.06);
+    } else if (event.key === '0') {
+      rotationRef.current = { yaw: -0.62, pitch: 0.28 };
+      zoomRef.current = 1;
+    } else return;
+    event.preventDefault();
   };
 
   return (
@@ -633,12 +711,14 @@ export default function OrbitScene() {
           <button
             className={mode === 'monitor' ? 'active' : ''}
             onClick={() => changeMode('monitor')}
+            aria-pressed={mode === 'monitor'}
           >
             <span className="nav-icon">◉</span> Orbit monitor
           </button>
           <button
             className={mode === 'replay' ? 'active' : ''}
             onClick={() => changeMode('replay')}
+            aria-pressed={mode === 'replay'}
           >
             <span className="nav-icon">⌁</span> AI historical replay
           </button>
@@ -662,11 +742,15 @@ export default function OrbitScene() {
                   <span className="eyebrow">SCREENING QUEUE</span>
                   <h1>Close approaches</h1>
                 </div>
-                <span className="count-badge">03</span>
+                <span className="count-badge" aria-label={`${filteredConjunctions.length} matching events`}>
+                  {String(filteredConjunctions.length).padStart(2, '0')}
+                </span>
               </div>
               <label className="search-box">
                 <span aria-hidden="true">⌕</span>
+                <span className="sr-only">Search by object or event ID</span>
                 <input
+                  type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search object or event"
@@ -679,6 +763,7 @@ export default function OrbitScene() {
                     className={filters[kind] ? `filter-chip ${kind}` : 'filter-chip muted'}
                     onClick={() => setFilters((value) => ({ ...value, [kind]: !value[kind] }))}
                     aria-pressed={filters[kind]}
+                    aria-label={`${filters[kind] ? 'Hide' : 'Show'} ${kind === 'rocket' ? 'rocket bodies' : kind}`}
                   >
                     <i /> {kind === 'rocket' ? 'Rocket' : kind[0].toUpperCase() + kind.slice(1)}
                   </button>
@@ -692,6 +777,7 @@ export default function OrbitScene() {
                       key={event.id}
                       onClick={() => setSelectedEvent(index)}
                       className={index === selectedEvent ? 'event-card selected' : 'event-card'}
+                      aria-pressed={index === selectedEvent}
                     >
                       <span className={`urgency ${event.urgency.toLowerCase()}`}>
                         {event.urgency}
@@ -709,6 +795,11 @@ export default function OrbitScene() {
                     </button>
                   );
                 })}
+                {filteredConjunctions.length === 0 && (
+                  <div className="empty-state" role="status">
+                    No matching objects or event IDs.
+                  </div>
+                )}
               </div>
               <div className="rail-note">
                 <span>i</span>
@@ -738,6 +829,7 @@ export default function OrbitScene() {
                       setRevealed(false);
                     }}
                     className={index === selectedReplay ? 'event-card replay selected' : 'event-card replay'}
+                    aria-pressed={index === selectedReplay}
                   >
                     <span className="replay-number">0{index + 1}</span>
                     <span className="event-pair">
@@ -770,9 +862,12 @@ export default function OrbitScene() {
             onPointerUp={() => (dragRef.current.active = false)}
             onPointerCancel={() => (dragRef.current.active = false)}
             onWheel={handleWheel}
+            onKeyDown={handleCanvasKeyDown}
+            tabIndex={mode === 'monitor' ? 0 : -1}
+            role="img"
             aria-label={
               mode === 'monitor'
-                ? 'Animated orbital traffic visualization around Earth'
+                ? 'Animated orbital traffic visualization around Earth. Use arrow keys to rotate, plus and minus to zoom, and zero to reset.'
                 : 'Magnified relative encounter geometry visualization'
             }
           />
@@ -786,7 +881,11 @@ export default function OrbitScene() {
           </div>
           <div className="scene-badge">
             <span className="pulse-dot" />
-            {mode === 'monitor' ? '512 OBJECT RENDER TEST' : 'SEPARATION MAGNIFIED'}
+            {reducedMotion && !playing
+              ? 'MOTION PAUSED'
+              : mode === 'monitor'
+                ? '512 OBJECT RENDER TEST'
+                : 'SEPARATION MAGNIFIED'}
           </div>
           {mode === 'monitor' ? (
             <div className="legend">
@@ -799,15 +898,17 @@ export default function OrbitScene() {
               Historical ESA records do not provide an honest absolute globe position. This view uses relative R–T geometry.
             </div>
           )}
-          <button
-            className="reset-view"
-            onClick={() => {
-              rotationRef.current = { yaw: -0.62, pitch: 0.28 };
-              zoomRef.current = 1;
-            }}
-          >
-            ⟳ Reset view
-          </button>
+          {mode === 'monitor' && (
+            <button
+              className="reset-view"
+              onClick={() => {
+                rotationRef.current = { yaw: -0.62, pitch: 0.28 };
+                zoomRef.current = 1;
+              }}
+            >
+              ⟳ Reset view
+            </button>
+          )}
           {mode === 'monitor' && (
             <div className="encounter-inset">
               <div className="inset-topline">
@@ -927,7 +1028,12 @@ export default function OrbitScene() {
                   </div>
                 ))}
               </div>
-              <button className={revealed ? 'reveal-button revealed' : 'reveal-button'} onClick={() => setRevealed(true)}>
+              <button
+                className={revealed ? 'reveal-button revealed' : 'reveal-button'}
+                onClick={() => setRevealed(true)}
+                disabled={revealed}
+                aria-live="polite"
+              >
                 {revealed ? (
                   <><span>FINAL RECORDED RISK</span><strong>{currentReplay.finalRisk.toFixed(2)}</strong><small>absolute error {Math.abs(currentReplay.finalRisk - currentReplay.prediction).toFixed(2)}</small></>
                 ) : (
@@ -956,22 +1062,25 @@ export default function OrbitScene() {
           <div><span>MODE</span><strong>{mode === 'monitor' ? 'ECEF' : 'R–T–N'}</strong><small>frame</small></div>
         </div>
         <div className="transport">
-          <button onClick={() => setTimelineValue(Math.max(0, timeline - 5))} aria-label="Step backward">−5</button>
+          <button onClick={() => setTimelineValue(timeline - 5)} aria-label="Step backward 5 seconds">−5</button>
           <button className="play-button" onClick={() => setPlaying((value) => !value)} aria-label={playing ? 'Pause' : 'Play'}>
             {playing ? 'Ⅱ' : '▶'}
           </button>
-          <button onClick={() => setTimelineValue(Math.min(120, timeline + 5))} aria-label="Step forward">+5</button>
+          <button onClick={() => setTimelineValue(timeline + 5)} aria-label="Step forward 5 seconds">+5</button>
         </div>
         <div className="timeline-control">
           <span>{mode === 'monitor' ? 'TCA − 15 MIN' : 'T − 7 DAYS'}</span>
           <input
             type="range"
             min="0"
-            max="120"
+            max={MAX_TIMELINE}
             step="0.1"
-            value={Math.min(120, timeline)}
+            value={Math.min(MAX_TIMELINE, timeline)}
             onChange={(event) => setTimelineValue(Number(event.target.value))}
             aria-label="Simulation timeline"
+            style={{
+              background: `linear-gradient(90deg, var(--cyan) 0 ${(timeline / MAX_TIMELINE) * 100}%, rgba(109,153,181,.17) ${(timeline / MAX_TIMELINE) * 100}% 100%)`,
+            }}
           />
           <span>{mode === 'monitor' ? 'TCA + 15 MIN' : 'T − 2 DAYS'}</span>
         </div>
