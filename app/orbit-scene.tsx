@@ -136,7 +136,12 @@ export default function OrbitScene() {
   }, []);
 
   useEffect(() => {
-    if (watchlistReady.current) localStorage.setItem('orbitshield.watchlist.v1', JSON.stringify(watchlist));
+    if (!watchlistReady.current) return;
+    try {
+      localStorage.setItem('orbitshield.watchlist.v1', JSON.stringify(watchlist));
+    } catch {
+      // Keep the watchlist usable when browser storage is blocked or full.
+    }
   }, [watchlist]);
 
   useEffect(() => {
@@ -257,8 +262,8 @@ export default function OrbitScene() {
         <button className="rail-toggle" onClick={() => setLeftOpen((value) => !value)} aria-label="Toggle fleet rail">{leftOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}</button>
         <div className="brand"><span className="brand-glyph"><i /></span><div><strong>ORBITSHIELD AI</strong><small>Orbital traffic intelligence</small></div></div>
         <nav className="view-tabs" aria-label="Intelligence view">
-          <button className={mode === 'screening' ? 'active' : ''} onClick={() => setMode('screening')}>Current screening</button>
-          <button className={mode === 'validation' ? 'active' : ''} onClick={() => { setMode('validation'); setInspectorOpen(true); }}>CDM validation</button>
+          <button className={mode === 'screening' ? 'active' : ''} onClick={() => setMode('screening')} aria-pressed={mode === 'screening'}>Current screening</button>
+          <button className={mode === 'validation' ? 'active' : ''} onClick={() => { setMode('validation'); setInspectorOpen(true); }} aria-pressed={mode === 'validation'}>CDM validation</button>
         </nav>
         <div className="global-search">
           <Search size={15} /><input value={query} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }} onFocus={() => setSearchOpen(true)} placeholder="Search object or NORAD ID" aria-label="Search the active catalogue" />
@@ -278,7 +283,7 @@ export default function OrbitScene() {
             <button className={`fleet-action ${fleetActive ? 'active' : ''}`} onClick={activateFleet}><span className="fleet-icon"><Satellite size={18} /></span><span><strong>India Earth Observation Fleet</strong><small>{fleetActive ? 'Active · highest priority selected' : 'Activate six verified missions'}</small></span>{fleetActive ? <Check size={16} /> : <Plus size={16} />}</button>
             <div className="watchlist-header"><span>Local watchlist · {watchlist.length}</span><button onClick={() => setWatchlist(defaultWatchlist)}><RotateCcw size={12} /> Reset</button></div>
             {previewId && <div className="preview-card"><span>Search preview</span><strong>{recordMap.get(previewId)?.OBJECT_NAME ?? `NORAD ${previewId}`}</strong><button onClick={() => setWatchlist((current) => current.includes(previewId) ? current : [...current, previewId])} disabled={watchlist.includes(previewId)}>{watchlist.includes(previewId) ? <><Check size={12} /> In watchlist</> : <><Plus size={12} /> Add to watchlist</>}</button></div>}
-            <div className="queue-tools"><div className="filter-row">{(['review', 'watch', 'low'] as ScreeningPriority[]).map((priority) => <button key={priority} className={`${priority} ${filters.has(priority) ? 'active' : ''}`} onClick={() => toggleFilter(priority)}>{priorityLabels[priority]}</button>)}</div><label>Sort <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}><option value="priority">Priority</option><option value="tca">TCA</option><option value="probability">Max probability</option><option value="range">Minimum range</option></select><ChevronDown size={12} /></label></div>
+            <div className="queue-tools"><div className="filter-row">{(['review', 'watch', 'low'] as ScreeningPriority[]).map((priority) => <button key={priority} className={`${priority} ${filters.has(priority) ? 'active' : ''}`} onClick={() => toggleFilter(priority)} aria-pressed={filters.has(priority)}>{priorityLabels[priority]}</button>)}</div><label>Sort <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}><option value="priority">Priority</option><option value="tca">TCA</option><option value="probability">Max probability</option><option value="range">Minimum range</option></select><ChevronDown size={12} /></label></div>
             {!fleetActive ? <div className="rail-empty"><Layers3 size={22} /><strong>Global context is active</strong><p>Activate the India fleet to filter the current SOCRATES run and open the highest screening priority.</p></div> : <div className="event-queue">{sortedEvents.slice(0, 60).map((event) => <button key={event.id} className={`event-row ${selectedEventId === event.id ? 'selected' : ''}`} onClick={() => void selectEvent(event)}><span className={`priority-dot ${event.priority}`} /><span className="event-names"><strong>{cleanName(event.primaryName)}</strong><small>{cleanName(event.secondaryName)}</small></span><span className="event-figures"><b>{event.rangeKm?.toFixed(2) ?? '—'} km</b><small>{event.maximumProbability?.toExponential(1) ?? 'Needs data'}</small></span></button>)}</div>}
             <div className="rail-sources"><SourceStatus status={catalog?.status} title="Orbit catalogue" detail={`${catalog?.count.toLocaleString() ?? '—'} active payload records`} /><SourceStatus status={conjunctions?.status} title="SOCRATES screening" detail={`${conjunctions?.run.conjunctionCount?.toLocaleString() ?? '—'} conjunctions in run`} /></div>
           </> : <>
