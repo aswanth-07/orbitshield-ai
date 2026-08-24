@@ -1,13 +1,17 @@
-# OrbitShield AI prototype
+# OrbitShield AI
 
-Interactive rendering proof for a two-day internal hackathon proposal in the Space Technology theme.
+OrbitShield is an interactive 3D orbital-traffic and conjunction-risk explorer built for the Space Technology theme.
 
-The prototype deliberately separates two experiences:
+The current interface includes:
 
-- **Orbit Monitor** renders 512 deterministic representative objects around an interactive Earth, with filters, selected orbit trails, conjunction cards, time controls and a clearly magnified encounter inset.
-- **AI Historical Replay** uses a relative R-T-N encounter view and representative saved inference values to demonstrate the intended ESA event-replay interaction. It does not invent an absolute historical Earth position.
+- live CelesTrak catalogue context and SOCRATES conjunction metrics;
+- bright-green satellite markers and size-coded debris markers;
+- persistent watchlist orbits and focused satellite/debris encounter paths;
+- **Follow**, **Encounter**, **Free 3D**, and **Reset** camera modes with rotate, pan, zoom-to-cursor, and touch controls;
+- a collision-candidate workflow that isolates one pair, moves to TCA, and marks the public-element closest-approach approximation; and
+- an oblique R-T-N depth inset with a separately magnified normal axis so out-of-plane separation remains readable.
 
-All cards are labelled as representative prototype data. Production implementation should replace them with a timestamped CelesTrak OMM/SOCRATES cache and leakage-safe predictions trained on ESA CDM event groups with a strict T-2-day cutoff.
+SOCRATES values remain the authoritative public conjunction metrics shown by the UI. The plotted orbit geometry and closest-approach position are contextual approximations based on public orbital elements and are not operational manoeuvre guidance.
 
 ## Run locally
 
