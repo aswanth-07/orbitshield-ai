@@ -67,13 +67,34 @@ export function sampleOrbitPath(
 }
 
 /**
- * Samples one complete SGP4 revolution in a fixed Earth frame.
- *
- * Satellite markers still use the date-specific Greenwich angle, so their
- * displayed motion remains time-correct. Orbit wires use one fixed angle for
- * the full revolution because they represent the orbital plane, not a drifting
- * ground track. Repeating the first point makes the visual path explicitly
- * closed for the globe renderer.
+ * Samples one complete SGP4 ground track in the same Earth-fixed frame used by
+ * the moving markers. The path is intentionally not forced closed: Earth
+ * rotates below an inertial orbit during one revolution, so closing it would
+ * create a visible seam and detach the marker from its own track.
+ */
+export function sampleDynamicOrbitPath(
+  record: OmmRecord,
+  center: Date,
+  color: string,
+  samples = 180,
+): OrbitPath {
+  const meanMotion = Number(record.MEAN_MOTION);
+  const periodMs = Number.isFinite(meanMotion) && meanMotion > 0 ? (86_400_000 / meanMotion) : 5_400_000;
+  const sampleCount = Math.max(3, Math.floor(samples));
+  const centeredSamples = sampleCount % 2 === 0 ? sampleCount + 1 : sampleCount;
+  return sampleOrbitSegment(
+    record,
+    new Date(center.getTime() - periodMs / 2),
+    new Date(center.getTime() + periodMs / 2),
+    color,
+    centeredSamples,
+  );
+}
+
+/**
+ * Samples one complete SGP4 revolution in a fixed Earth frame for orbit-plane
+ * analysis. The globe uses `sampleDynamicOrbitPath` so visible motion stays
+ * aligned with the time-varying Earth-fixed satellite marker.
  */
 export function sampleClosedOrbitPath(
   record: OmmRecord,

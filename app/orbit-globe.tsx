@@ -14,7 +14,7 @@ import {
   type TcaReplayPhase,
 } from './lib/collision-visualization';
 import { sampleSgp4AnchoredManeuverPath, type ManeuverCandidate } from './lib/maneuver';
-import { prepareOmm, propagateOmm, propagatePreparedOmm, sampleClosedOrbitPath } from './lib/orbit';
+import { prepareOmm, propagateOmm, propagatePreparedOmm, sampleDynamicOrbitPath, sampleOrbitSegment } from './lib/orbit';
 import type { ConjunctionRecord, OmmRecord, OrbitPath, PropagatedObject, ThreatObject } from './lib/types';
 import PropagationWorker from './workers/propagation.worker.ts?worker';
 
@@ -729,7 +729,7 @@ export default function OrbitGlobe({
       const record = recordById.get(catalogId);
       if (!record) return [];
       const style = orbitVisualStyle('watchlist');
-      return [{ ...sampleClosedOrbitPath(record, sampledAt, style.color, 72), role: 'watchlist' as const, ...style }];
+      return [{ ...sampleDynamicOrbitPath(record, sampledAt, style.color, 72), role: 'watchlist' as const, ...style }];
     });
     if (!selectedEvent) {
       if (!selectedSatelliteId) return background;
@@ -740,7 +740,7 @@ export default function OrbitGlobe({
         ? MONITORED_SATELLITE_COLOR
         : CATALOG_SATELLITE_COLOR;
       return [{
-        ...sampleClosedOrbitPath(selectedRecord, sampledAt, selectedColor, 112),
+        ...sampleDynamicOrbitPath(selectedRecord, sampledAt, selectedColor, 112),
         role: 'selected-satellite' as const,
         ...selectedStyle,
         color: selectedColor,
@@ -758,14 +758,14 @@ export default function OrbitGlobe({
     const segmentSamples = Math.min(280, Math.max(72, Math.ceil(durationMinutes / 4)));
     const selectedPath = protectedRecord
       ? [{
-          ...sampleClosedOrbitPath(protectedRecord, new Date(tcaTime), selectedStyle.color, 128),
+          ...sampleOrbitSegment(protectedRecord, new Date(startTime), new Date(tcaTime), selectedStyle.color, segmentSamples),
           role: 'protected-risk' as const,
           ...selectedStyle,
         }]
       : [];
     const pairedPath = counterpartRecord
       ? [{
-          ...sampleClosedOrbitPath(counterpartRecord, new Date(tcaTime), pairedStyle.color, 128),
+          ...sampleOrbitSegment(counterpartRecord, new Date(startTime), new Date(tcaTime), pairedStyle.color, segmentSamples),
           role: 'paired-object' as const,
           ...pairedStyle,
         }]
@@ -781,14 +781,6 @@ export default function OrbitGlobe({
           segmentSamples,
         )
       : null;
-    const cpaStyle = orbitVisualStyle('cpa-link');
-    const cpaPath = showEncounterGeometry && tcaPoints.length === 2 ? [{
-      catalogId: -1,
-      name: 'Public-element closest approach connector',
-      role: 'cpa-link' as const,
-      ...cpaStyle,
-      points: tcaPoints.map(({ lat, lng, altitude }) => ({ lat, lng, altitude })),
-    }] : [];
     const depthPaths = showEncounterGeometry ? tcaPoints.map((point) => {
       const color = RISK_ORBIT_COLOR;
       const style = orbitVisualStyle('depth-guide', color);
@@ -809,7 +801,6 @@ export default function OrbitGlobe({
       ...pairedPath,
       ...(maneuverPath ? [{ ...maneuverPath, ...maneuverStyle }] : []),
       ...depthPaths,
-      ...cpaPath,
     ];
   }, [fleetIds, focusRecords, maneuverCandidate, orbitPathBucket, reviewPair, selectedEvent, selectedIds, selectedSatelliteId, showEncounterGeometry, tcaPoints, trajectoryStartTime]);
 

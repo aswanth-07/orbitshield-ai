@@ -45,7 +45,7 @@ const fleetOrbitSnapshot = fleetOrbitFixture as {
   objects: Array<{ catalogId: number; epoch: string; tleLine1: string; tleLine2: string }>;
 };
 const defaultFleetIds = INDIA_EO_FLEET.objects.map((item) => item.catalogId);
-const MONITORING_STORAGE_KEY = 'orbitshield.monitoring-list.v2';
+const MONITORING_STORAGE_KEY = 'orbitshield.monitoring-list.v4';
 const priorityLabels: Record<ScreeningPriority, string> = {
   review: 'Review', watch: 'Watch', low: 'Low', 'needs-data': 'Needs data',
 };
@@ -293,6 +293,7 @@ export default function OperationsWorkspace() {
   const [fleetManagerOpen, setFleetManagerOpen] = useState(false);
   const [fleetSearch, setFleetSearch] = useState('');
   const [selectedManeuverCandidate, setSelectedManeuverCandidate] = useState<ManeuverCandidate | null>(null);
+  const [selectedMissionFocusId, setSelectedMissionFocusId] = useState<string | null>(null);
   const simulationRef = useRef(0);
   const lastTick = useRef(0);
   const replayCancel = useRef<(() => void) | null>(null);
@@ -461,15 +462,22 @@ export default function OperationsWorkspace() {
     return event.primaryCatalogId;
   }, [monitoredIdSet]);
 
-  const selectEvent = useCallback(async (event: ConjunctionRecord, startReplay = false, modelAlert = false) => {
+  const selectEvent = useCallback(async (
+    event: ConjunctionRecord,
+    startReplay = false,
+    modelAlert = false,
+    missionFocus = false,
+    preferredProtectedId?: number,
+  ) => {
     replayCancel.current?.();
     replayCancel.current = null;
     setReplayActive(false);
     setReplayPhase(null);
     setSelectedMlAlertId(modelAlert ? event.id : null);
+    setSelectedMissionFocusId(missionFocus ? event.id : null);
     setSelectedManeuverCandidate(null);
     setCatalogueVisible(false);
-    const protectedId = chooseProtectedId(event);
+    const protectedId = preferredProtectedId ?? chooseProtectedId(event);
     const tcaTime = new Date(event.tca).getTime();
     const currentTime = simulationRef.current || Date.now();
     const approachStart = Number.isFinite(tcaTime) ? tcaReplayStart(currentTime, tcaTime) : currentTime;
@@ -610,6 +618,7 @@ export default function OperationsWorkspace() {
     cancelReplay();
     setPendingGlobeReplayId(null);
     setSelectedMlAlertId(null);
+    setSelectedMissionFocusId(null);
     setSelectedManeuverCandidate(null);
     setSelectedEventId(null);
     setTrajectoryStartTime(null);
@@ -632,6 +641,7 @@ export default function OperationsWorkspace() {
       cancelReplay();
       setSelectedEventId(null);
       setSelectedMlAlertId(null);
+      setSelectedMissionFocusId(null);
       setSelectedManeuverCandidate(null);
       setTrajectoryStartTime(null);
     }
@@ -648,6 +658,7 @@ export default function OperationsWorkspace() {
     const now = Date.now();
     setSelectedEventId(null);
     setSelectedMlAlertId(null);
+    setSelectedMissionFocusId(null);
     setSelectedManeuverCandidate(null);
     setTrajectoryStartTime(null);
     setCatalogueVisible(true);
@@ -692,6 +703,14 @@ export default function OperationsWorkspace() {
   }), [chooseProtectedId, rankedEvents, recordMap, threatsById, triageMinute]);
   const mlAlertCount = liveMlAlerts.length;
   const primaryMlAlert = liveMlAlerts[0] ?? null;
+  const missionFocusAlert = useMemo(() => rankedEvents
+    .filter((event) => event.primaryCatalogId === 60238 || event.secondaryCatalogId === 60238)
+    .filter((event) => {
+      const hoursToTca = (new Date(event.tca).getTime() - triageMinute) / 3_600_000;
+      return Number.isFinite(hoursToTca) && hoursToTca > 0 && hoursToTca <= 48;
+    })
+    .sort((first, second) => (first.rangeKm ?? Number.POSITIVE_INFINITY) - (second.rangeKm ?? Number.POSITIVE_INFINITY))[0] ?? null,
+  [rankedEvents, triageMinute]);
   const monitoredEvents = (namedEvents.length >= 6 ? namedEvents : rankedEvents)
     .filter((event) => event.id !== primaryMlAlert?.event.id)
     .slice(0, 4);
@@ -705,6 +724,9 @@ export default function OperationsWorkspace() {
   }, [primaryMlAlert, selectEvent]);
   const selectedMlAlert = selectedMlAlertId
     ? liveMlAlerts.find((alert) => alert.event.id === selectedMlAlertId) ?? null
+    : null;
+  const selectedMissionFocus = selectedMissionFocusId && missionFocusAlert?.id === selectedMissionFocusId
+    ? missionFocusAlert
     : null;
   const selectedProtectedRecord = selectedEvent && selectedProtectedId ? recordMap.get(selectedProtectedId) : null;
   const selectedCounterpartRecord = selectedCounterpart ? recordMap.get(selectedCounterpart.id) : null;
@@ -728,7 +750,7 @@ export default function OperationsWorkspace() {
             {fleetSearchResults.map((record) => <button key={record.NORAD_CAT_ID} onClick={() => addMonitoredSatellite(Number(record.NORAD_CAT_ID))}><span><strong>{cleanName(record.OBJECT_NAME)}</strong><small>NORAD {record.NORAD_CAT_ID} · {record.COUNTRY_CODE || 'owner unavailable'}</small></span><Plus size={13} /></button>)}
             {fleetSearch.trim() && !fleetSearchResults.length && <small>No unmonitored active payload matched this search.</small>}
           </div>
-          <button className="ops-reset-fleet" onClick={resetMonitoringList}><RotateCcw size={12} /> Reset eight-satellite mission list</button>
+          <button className="ops-reset-fleet" onClick={resetMonitoringList}><RotateCcw size={12} /> Reset nine-satellite mission list</button>
         </div>}
         <div className="ops-fleet-list">
           {monitoredFleetObjects.map((satellite) => {
@@ -754,6 +776,16 @@ export default function OperationsWorkspace() {
               <span className="ops-alert-metric"><b>{countdown(primaryMlAlert.event.tca, clock)}</b><small>{formatIst(primaryMlAlert.event.tca, { seconds: true })}</small></span>
             </button> : <div className="ops-ml-alert-empty"><ShieldCheck size={14} /><span><strong>No elevated two-day alert</strong><small>The model rescans the loaded monitoring feed every minute.</small></span></div>}
         </div>
+        {missionFocusAlert && <>
+          <div className="ops-alert-heading mission"><span><Crosshair size={13} /> 48H MISSION ALERT</span><b>ISTSAT-1 · SOURCE SOCRATES</b></div>
+          <div className="ops-ml-alert-slot">
+            <button className={`mission ${selectedMissionFocusId === missionFocusAlert.id ? 'selected' : ''}`} onClick={() => void selectEvent(missionFocusAlert, true, false, true, 60238)}>
+              <span className="ops-alert-severity review"><Crosshair size={14} /></span>
+              <span className="ops-alert-copy"><strong>ISTSAT-1</strong><small>↳ {cleanName(counterpartFor(missionFocusAlert, 60238).name)}</small><em>{metric(missionFocusAlert.rangeKm, 'km', 3)} miss range · next 48 hours · analyst focus</em></span>
+              <span className="ops-alert-metric"><b>{countdown(missionFocusAlert.tca, clock)}</b><small>{formatIst(missionFocusAlert.tca, { seconds: true })}</small></span>
+            </button>
+          </div>
+        </>}
 
         <div className="ops-alert-heading candidates"><span><Database size={13} /> PUBLIC SCREENING CANDIDATES</span><b>TOP {monitoredEvents.length} OF {screeningCandidateCount}</b></div>
         <div className="ops-alert-list">
@@ -802,7 +834,7 @@ export default function OperationsWorkspace() {
           <small>{selectedEvent ? `${priorityLabels[selectedEvent.priority]} screening candidate · TCA ${formatIst(selectedEvent.tca, { seconds: true })}` : selectedRecord ? `${monitoredIdSet.has(Number(selectedRecord.NORAD_CAT_ID)) ? 'Monitored' : 'Catalogue'} satellite · NORAD ${selectedRecord.NORAD_CAT_ID}` : 'Select a satellite, screening candidate or ML alert'} · Orbit elements {catalog?.status ?? 'loading'}</small>
         </div>
         <div className="ops-layer-legend"><span><i className="catalog" /> Catalogue satellites</span><span><i className="sat" /> Monitored satellites</span><span><i className="debris" /> Screened debris</span><span><i className="orbit" /> Monitored orbits</span></div>
-        {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected closed SGP4 orbit</span><span><i className="counterpart" /> Counterpart closed SGP4 orbit</span>{selectedManeuverCandidate && <span><i className="maneuver" /> Suggested SGP4 + RTN path</span>}<span><i className="tca-target" /> Closest approach</span></div>}
+        {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected SGP4 approach track</span><span><i className="counterpart" /> Counterpart SGP4 approach track</span>{selectedManeuverCandidate && <span><i className="maneuver" /> Suggested SGP4 + RTN path</span>}<span><i className="tca-target" /> Closest approach</span></div>}
         {selectedEvent && selectedProtectedId && replayPhase === 'encounter' && <EncounterOverlay event={selectedEvent} protectedId={selectedProtectedId} threat={selectedThreat} maneuverCandidate={selectedManeuverCandidate} />}
         <div className="ops-globe-controls">
           <div className="ops-time-control"><button disabled={replayActive} onClick={() => setPlaying((value) => !value)} aria-label={playing ? 'Pause orbital animation' : 'Play orbital animation'}>{playing ? <Pause size={14} /> : <Play size={14} />}</button><span><b>{replayActive ? 'REPLAY TIME' : 'SIMULATION TIME'}</b><em ref={replayClockValueRef}>{formatIst(simulationTime, { seconds: true })}</em></span></div>
@@ -813,10 +845,10 @@ export default function OperationsWorkspace() {
       </section>
 
       <aside className="ops-analysis-rail" aria-label="OrbitShield analysis and advisory panel">
-        <div className="ops-analysis-heading"><div><span><Sparkles size={13} /> ORBITSHIELD ANALYST</span><strong>{selectedMlAlert ? 'ML-prioritized review' : selectedEvent ? 'Screening review' : selectedRecord ? 'Object profile' : 'ML review prioritizer'}</strong></div><b>{selectedMlAlert ? <><Bot size={14} /> MODEL</> : selectedEvent ? <><Database size={14} /> PUBLIC DATA</> : selectedRecord ? <><Database size={14} /> CATALOGUE</> : <><Bot size={14} /> MODEL</>}</b></div>
+        <div className="ops-analysis-heading"><div><span><Sparkles size={13} /> ORBITSHIELD ANALYST</span><strong>{selectedMlAlert ? 'ML-prioritized review' : selectedMissionFocus ? '48-hour mission alert' : selectedEvent ? 'Screening review' : selectedRecord ? 'Object profile' : 'ML review prioritizer'}</strong></div><b>{selectedMlAlert ? <><Bot size={14} /> MODEL</> : selectedMissionFocus ? <><Crosshair size={14} /> MISSION</> : selectedEvent ? <><Database size={14} /> PUBLIC DATA</> : selectedRecord ? <><Database size={14} /> CATALOGUE</> : <><Bot size={14} /> MODEL</>}</b></div>
         {selectedEvent && explanation && selectedCounterpart ? <>
           <section className={`ops-current-alert ${selectedEvent.priority}`}>
-            <div><span>{selectedMlAlert ? <><Bot size={13} /> ML ELEVATED</> : <><TriangleAlert size={13} /> SCREENING CANDIDATE</>}</span><b className={selectedMlAlert ? 'review' : selectedEvent.priority}>{selectedMlAlert ? `SCORE ${selectedMlAlert.score.toFixed(3)}` : priorityLabels[selectedEvent.priority]}</b></div>
+            <div><span>{selectedMlAlert ? <><Bot size={13} /> ML ELEVATED</> : selectedMissionFocus ? <><Crosshair size={13} /> 48H MISSION ALERT</> : <><TriangleAlert size={13} /> SCREENING CANDIDATE</>}</span><b className={selectedMlAlert || selectedMissionFocus ? 'review' : selectedEvent.priority}>{selectedMlAlert ? `SCORE ${selectedMlAlert.score.toFixed(3)}` : selectedMissionFocus ? 'MAJOR WATCH' : priorityLabels[selectedEvent.priority]}</b></div>
             <strong>{cleanName(selectedEvent.primaryCatalogId === selectedProtectedId ? selectedEvent.primaryName : selectedEvent.secondaryName)}</strong>
             <small>Possible conjunction with {cleanName(selectedCounterpart.name)} · NORAD {selectedCounterpart.id}</small>
           </section>
@@ -826,10 +858,12 @@ export default function OperationsWorkspace() {
             <p>CelesTrak reports a conservative maximum-Pc screening metric of {probabilityPercent(selectedEvent.maximumProbability)} for this close approach.</p>
             <strong>{selectedMlAlert
               ? `OrbitShield scored ${selectedMlAlert.score.toFixed(3)}, above the ${selectedMlAlert.threshold.toFixed(2)} review threshold. Review means obtaining a current CDM, checking uncertainty and deciding whether to monitor, coordinate or study a manoeuvre.`
+              : selectedMissionFocus
+              ? `This monitored mission has a ${metric(selectedEvent.rangeKm, 'km', 3)} SOCRATES approach inside the next 48 hours. OrbitShield elevates it for immediate analyst focus; the source probability remains a screening metric, not a collision prediction.`
               : `This is a ${priorityLabels[selectedEvent.priority].toLowerCase()} public screening candidate. An analyst should verify current tracking before any operational decision.`}</strong>
           </section>
 
-          {selectedMlAlert && <ManeuverStudyPanel key={selectedEvent.id} event={selectedEvent} protectedRecord={selectedProtectedRecord} counterpartRecord={selectedCounterpartRecord} now={triageMinute} onCandidateChange={setSelectedManeuverCandidate} />}
+          {(selectedMlAlert || selectedMissionFocus) && <ManeuverStudyPanel key={selectedEvent.id} event={selectedEvent} protectedRecord={selectedProtectedRecord} counterpartRecord={selectedCounterpartRecord} now={triageMinute} onCandidateChange={setSelectedManeuverCandidate} />}
 
           <section className="ops-risk-metrics">
             <div><span>TCA in IST</span><strong>{formatIst(selectedEvent.tca, { seconds: true, year: true })}</strong><small>{countdown(selectedEvent.tca, simulationTime)} from simulation time</small></div>
@@ -839,19 +873,22 @@ export default function OperationsWorkspace() {
           </section>
 
           <section className="ops-model-state">
-            <div className="ops-section-label"><span>CURRENT MODEL</span><b className={selectedMlAlert ? 'ready' : 'waiting'}>{selectedMlAlert ? 'HUMAN REVIEW' : 'NOT ELEVATED'}</b></div>
+            <div className="ops-section-label"><span>CURRENT MODEL</span><b className={selectedMlAlert || selectedMissionFocus ? 'ready' : 'waiting'}>{selectedMlAlert ? 'HUMAN REVIEW' : selectedMissionFocus ? 'MISSION FOCUS' : 'NOT ELEVATED'}</b></div>
             {selectedMlAlert ? <div className="ops-public-model-metrics">
               <span><small>Model score</small><strong>{selectedMlAlert.score.toFixed(3)}</strong></span>
               <span><small>Threshold</small><strong>{selectedMlAlert.threshold.toFixed(2)}</strong></span>
               <span><small>Time to TCA</small><strong>{selectedMlAlert.hoursToTca.toFixed(1)} h</strong></span>
               <span><small>Input coverage</small><strong>{Math.round(selectedMlAlert.inputCoverage * 100)}%</strong></span>
             </div> : null}
+            {selectedMissionFocus && !selectedMlAlert && <div className="ops-public-model-metrics"><span><small>Alert window</small><strong>48 h</strong></span><span><small>Reported range</small><strong>{metric(selectedMissionFocus.rangeKm, 'km', 3)}</strong></span><span><small>Source</small><strong>SOCRATES</strong></span><span><small>Orbit</small><strong>SGP4</strong></span></div>}
             <p>{selectedMlAlert
               ? `The ${PUBLIC_TRIAGE_MODEL.trees.length}-tree model ranks this event from TCA, source Max Pc, miss distance and relative speed. The score is a review priority, not collision probability.`
+              : selectedMissionFocus
+              ? 'This mission focus card is a time-and-geometry alert from the public SOCRATES feed. It is not an ML collision-probability claim; obtain a current CDM before making an operational decision.'
               : 'This event did not cross the deployed two-day model threshold, or its TCA is outside the current 48-hour inference window.'}</p>
           </section>
 
-          {!selectedMlAlert && <section className="ops-action-plan">
+          {!selectedMlAlert && !selectedMissionFocus && <section className="ops-action-plan">
             <div className="ops-section-label"><span>NEXT REVIEW</span><b>HUMAN DECISION</b></div>
             <ol>{explanation.recommendedSteps.slice(0, 2).map((step, index) => <li key={step}><b>{String(index + 1).padStart(2, '0')}</b><span>{step}</span></li>)}</ol>
           </section>}

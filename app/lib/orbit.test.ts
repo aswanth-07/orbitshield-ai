@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { propagateOmm, sampleClosedOrbitPath, sampleOrbitSegment } from './orbit';
+import { propagateOmm, sampleClosedOrbitPath, sampleDynamicOrbitPath, sampleOrbitSegment } from './orbit';
 import type { OmmRecord } from './types';
 
 const record: OmmRecord = {
@@ -27,6 +27,17 @@ const record: OmmRecord = {
 };
 
 describe('future orbit segment sampling', () => {
+  it('keeps the visible ground track on the moving SGP4 marker frame', () => {
+    const center = new Date('2026-03-26T10:53:58.905600Z');
+    const marker = propagateOmm(record, center);
+    const path = sampleDynamicOrbitPath(record, center, '#35d7ff', 11);
+
+    expect(marker).not.toBeNull();
+    expect(path.points[5].lat).toBeCloseTo(marker!.lat, 3);
+    expect(path.points[5].lng).toBeCloseTo(marker!.lng, 3);
+    expect(path.points[5].altitude).toBeCloseTo(marker!.altitude, 6);
+  });
+
   it('builds an explicitly closed SGP4 orbit wire', () => {
     const center = new Date('2026-03-26T10:53:58.905600Z');
     const path = sampleClosedOrbitPath(record, center, '#35d7ff', 64);
