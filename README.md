@@ -1,13 +1,13 @@
 # OrbitShield AI
 
-OrbitShield is an ML conjunction-risk workspace for small satellite teams. Public screening identifies possible close approaches, compatible operator CDMs feed a trained Histogram Gradient Boosting model, and only an elevated model score becomes an analyst alert. The workspace explains the evidence and follows the protected satellite and counterpart to closest approach on a live 3D globe.
+OrbitShield is an ML conjunction-risk workspace for small satellite teams. Current public screening identifies possible close approaches. A deployed two-day Histogram Gradient Boosting model scores every complete fleet event from time to TCA, present risk, miss distance and relative speed. Only elevated scores enter the analyst queue. The workspace explains the evidence and follows the protected satellite and counterpart to closest approach on a live 3D globe.
 
 The hackathon demonstration keeps two evidence lanes in one persistent product view:
 
-- **Public candidate intake:** CelesTrak OMM context, SOCRATES metrics, transparent Review/Watch/Low screening priorities, and six India Earth Observation missions. These rows are candidates, not ML alerts.
-- **ML risk prediction:** five event-held-out model families trained on ESA CDM histories. Histogram Gradient Boosting leads validation F2 and scores each compatible CDM sequence through the live endpoint. The held-out ESA Mission 1 pair starts automatically, receives nine unique CDMs and raises one model-driven elevated alert.
+- **Live two-day triage:** a 37-tree feed-compatible model scores current fleet events inside 48 hours and raises named, globe-mapped alerts. Its event-held-out test F2 is 0.631 and recall is 0.933.
+- **Professional model research:** five model families use the richer ESA CDM histories for the future operator-data tier. This benchmark remains technical evidence rather than the main judge workflow.
 
-The central globe opens on the monitored fleet and screened debris; the larger active catalogue is available from the optional Context control. SGP4 propagation follows the selected 1×, 10× or 60× simulation clock for the catalogue, fleet and risk objects. Public-candidate follow compresses a 20-minute encounter window into 6.5 seconds. Selecting the ML alert opens a separate 6.5-second magnified R–T–N replay built from the held-out CDM miss vector and relative velocity. All judge-facing absolute times, including public TCA, are displayed in India Standard Time. SOCRATES values remain authoritative for public screening candidates.
+The central globe opens on the monitored fleet and screened debris; the larger active catalogue is available from the optional Context control. Selecting a live ML alert starts the globe replay in one click. SGP4 propagates both objects across the final 20-minute approach, while a chase camera follows the protected satellite. The protected and counterpart paths remain distinct and a pulsing red target marks closest approach. All judge-facing absolute times, including TCA, are displayed in India Standard Time. SOCRATES values remain authoritative for source metrics.
 
 ## Run locally
 
@@ -32,4 +32,4 @@ Train the five-model benchmark with:
 .\.venv-ml\Scripts\python.exe .\ml\benchmark_models.py
 ```
 
-The model output is a raw triage score, not collision probability. OrbitShield raises an analyst alert when a compatible CDM sequence crosses the trained model threshold. An external CDM connector can include an absolute `tca` timestamp in `POST /api/model/live`; the interface normalizes and displays it in IST. The held-out ESA test feed has only a relative T− timeline because its absolute event time is anonymized. OrbitShield does not confirm collisions, recommend manoeuvres, or replace a qualified flight-dynamics analyst.
+The model output is a raw triage score, not collision probability. The current model accepts only complete events inside its trained 48-hour horizon and rescans the feed every minute. OrbitShield does not confirm collisions, recommend manoeuvres, or replace a qualified flight-dynamics analyst.

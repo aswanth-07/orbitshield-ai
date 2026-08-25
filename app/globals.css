@@ -726,22 +726,6 @@ details li,
 .ops-sat-state.review { color: #ff6d70; }
 .ops-sat-state.review i { background: #ff6d70; box-shadow: 0 0 8px rgba(255,109,112,.45); }
 .ops-sat-state.needs-data { color: #8b969c; }
-.ops-validation-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 14px; border-top: 1px solid #20282d; color: #7f9198; background: #0a0e10; }
-.ops-validation-heading span { display: flex; align-items: center; gap: 6px; font: 700 8px var(--font-geist-mono), monospace; letter-spacing: .06em; }
-.ops-validation-heading span svg { color: #6fdcf3; }
-.ops-validation-heading b { color: #50d9b3; font: 700 7px var(--font-geist-mono), monospace; }
-.ops-validation-pair { width: calc(100% - 16px); display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin: 0 8px 9px; padding: 8px 9px; border: 1px solid #24343a; border-radius: 7px; background: rgba(39,89,101,.035); color: #aebbc0; text-align: left; cursor: pointer; }
-.ops-validation-pair:hover, .ops-validation-pair.selected { border-color: #3d6874; background: rgba(53,215,255,.055); }
-.ops-validation-pair.elevated { border-color: rgba(255,109,112,.48); background: linear-gradient(90deg,rgba(255,109,112,.09),rgba(255,109,112,.02)); box-shadow: inset 2px 0 #ff6d70; }
-.ops-validation-pair > span { min-width: 0; display: flex; align-items: center; gap: 6px; }
-.ops-validation-pair > span svg { flex: 0 0 auto; color: #68cfe6; }
-.ops-validation-pair > span:nth-child(2) svg { color: #f4b85a; }
-.ops-validation-pair i, .ops-validation-pair strong, .ops-validation-pair small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ops-validation-pair i { font-style: normal; }
-.ops-validation-pair strong { color: #d5dfe2; font-size: 8px; }
-.ops-validation-pair small { margin-top: 2px; color: #67767d; font-size: 6px; }
-.ops-validation-pair em { grid-column: 1 / -1; padding-top: 5px; border-top: 1px solid #202d32; color: #78888e; font: 7px var(--font-geist-mono), monospace; font-style: normal; }
-.ops-validation-pair.elevated em { color: #ff8588; }
 .ops-alert-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 14px; border-top: 1px solid #20282d; border-bottom: 1px solid #20282d; background: #0c1012; }
 .ops-alert-heading span { display: flex; align-items: center; gap: 6px; color: #cbd5d8; font: 700 9px var(--font-geist-mono), monospace; }
 .ops-alert-heading span svg { color: #f4b85a; }
@@ -749,7 +733,7 @@ details li,
 .ops-alert-heading.model span svg { color: #ff6d70; }
 .ops-alert-heading.model b { color: #ff7e81; }
 .ops-alert-heading.candidates span svg, .ops-alert-heading.candidates b { color: #68bcd0; }
-.ops-ml-alert-slot { padding: 8px; border-bottom: 1px solid #20282d; background: #090d0f; }
+.ops-ml-alert-slot { display: grid; gap: 6px; padding: 8px; border-bottom: 1px solid #20282d; background: #090d0f; }
 .ops-ml-alert-slot > button { width: 100%; min-height: 78px; display: grid; grid-template-columns: 27px minmax(0,1fr) 64px; align-items: start; gap: 8px; padding: 10px 8px; border: 1px solid rgba(255,109,112,.38); border-radius: 7px; background: linear-gradient(90deg,rgba(255,109,112,.09),rgba(255,109,112,.02)); color: #d4dde0; text-align: left; cursor: pointer; }
 .ops-ml-alert-slot > button:hover, .ops-ml-alert-slot > button.selected { border-color: #ff6d70; box-shadow: inset 2px 0 #ff6d70; }
 .ops-ml-alert-empty { min-height: 52px; display: flex; align-items: center; gap: 9px; padding: 9px; border: 1px solid #213036; border-radius: 7px; color: #50d9b3; background: rgba(80,217,179,.025); }
@@ -845,9 +829,6 @@ details li,
 .ops-time-control, .ops-camera-control { display: flex; align-items: center; gap: 5px; }
 .ops-time-control button, .ops-camera-control button, .ops-live-button { height: 34px; border: 1px solid #29353a; border-radius: 5px; background: #111719; color: #9ba8ae; font-size: 8px; cursor: pointer; }
 .ops-time-control > button { width: 34px; display: grid; place-items: center; }
-.ops-speed-control { display: flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid #263339; border-radius: 6px; background: #090d0f; }
-.ops-speed-control button { width: 34px; height: 28px; border: 0; background: transparent; font: 700 8px var(--font-geist-mono), monospace; }
-.ops-speed-control button.active { color: #73e5fb; background: rgba(53,215,255,.12); box-shadow: inset 0 0 0 1px rgba(53,215,255,.26); }
 .ops-time-control > span { display: none; color: #78868d; font: 8px var(--font-geist-mono), monospace; line-height: 1.35; white-space: nowrap; }
 .ops-time-control > span b { display: block; color: #67d9f1; font-size: 7px; }
 .ops-camera-control button { display: flex; align-items: center; gap: 5px; padding: 0 8px; }
@@ -915,6 +896,11 @@ details li,
 .ops-model-flow span.done { color: #50d9b3; }
 .ops-model-flow > i { height: 1px; background: #2d383d; }
 .ops-model-state > p { margin: 10px 0 0; color: #7f8d93; font-size: 9px; line-height: 1.45; }
+.ops-public-model-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; margin-top: 10px; }
+.ops-public-model-metrics span { min-width: 0; padding: 7px 5px; border: 1px solid #29353a; border-radius: 5px; background: #090d0f; }
+.ops-public-model-metrics small, .ops-public-model-metrics strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ops-public-model-metrics small { color: #637178; font-size: 6px; }
+.ops-public-model-metrics strong { margin-top: 4px; color: #ff8588; font: 700 9px var(--font-geist-mono), monospace; }
 .ops-model-state details { margin-top: 10px; border-top: 1px solid #20292e; }
 .ops-model-state summary { display: flex; align-items: center; justify-content: space-between; padding-top: 10px; color: #87bdc9; font-size: 9px; cursor: pointer; list-style: none; }
 .ops-model-proof { display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; margin-top: 9px; }
@@ -1060,7 +1046,6 @@ details li,
   .ops-globe-status { top: 9px; left: 9px; right: 9px; max-width: none; }
   .ops-event-orbit-legend { top: 88px; right: 8px; }
   .ops-globe-controls { left: 8px; right: 8px; bottom: 8px; grid-template-columns: auto minmax(160px,1fr) auto; }
-  .ops-speed-control button { width: 30px; }
   .ops-encounter-overlay { bottom: 76px; }
   .ml-tca-replay { grid-template-rows: 48px minmax(220px,1fr) auto 3px; padding: 8px; }
   .ml-tca-replay-head { grid-template-columns: auto 1fr; }

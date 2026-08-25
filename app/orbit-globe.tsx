@@ -619,6 +619,7 @@ export default function OrbitGlobe({
     if (!protectedRecord || !counterpartRecord) return;
 
     const controls = globe.controls();
+    const markerMap = markerByCatalogIdRef.current;
     controls.enableRotate = false;
     controls.enablePan = false;
     controls.enableZoom = false;
@@ -643,12 +644,17 @@ export default function OrbitGlobe({
     };
 
     const moveMarker = (catalogId: number, position: THREE.Vector3) => {
-      markerByCatalogIdRef.current.get(catalogId)?.position.copy(position);
+      markerMap.get(catalogId)?.position.copy(position);
     };
 
     const tick = () => {
       const replayFrame = replayFrameRef.current;
       if (replayFrame) {
+        const targetMarker = markerMap.get(-1);
+        const targetPulse = 1 + Math.sin(performance.now() / 150) * 0.14;
+        targetMarker?.traverse((child) => {
+          if (child.name === 'closest-approach-target') child.scale.set(11 * targetPulse, 11 * targetPulse, 1);
+        });
         const date = new Date(replayFrame.simulationTime);
         const protectedPoint = propagatePreparedOmm(protectedRecord, date);
         const counterpartPoint = propagatePreparedOmm(counterpartRecord, date);
@@ -659,8 +665,19 @@ export default function OrbitGlobe({
           moveMarker(reviewPair.counterpartCatalogId, counterpartPosition);
 
           if (replayFrame.phase === 'follow') {
-            globe.camera().position.lerp(desiredCamera(protectedPosition, 46, 18, 10), 0.14);
-            controls.target.lerp(protectedPosition, 0.2);
+            const futurePoint = propagatePreparedOmm(protectedRecord, new Date(date.getTime() + 10_000));
+            const forward = futurePoint
+              ? sceneVector(futurePoint).sub(protectedPosition).normalize()
+              : new THREE.Vector3(0, 0, 0);
+            const outward = protectedPosition.clone().normalize();
+            const side = new THREE.Vector3().crossVectors(outward, forward).normalize();
+            const chaseCamera = protectedPosition.clone()
+              .add(outward.multiplyScalar(40))
+              .add(forward.multiplyScalar(-28))
+              .add(side.multiplyScalar(8));
+            const lookAhead = protectedPosition.clone().add(forward.multiplyScalar(7));
+            globe.camera().position.lerp(chaseCamera, 0.32);
+            controls.target.lerp(lookAhead, 0.46);
           } else {
             const center = protectedPosition.clone().add(counterpartPosition).multiplyScalar(0.5);
             if (replayFrame.phase === 'acquire') {
@@ -678,7 +695,12 @@ export default function OrbitGlobe({
     };
 
     animationFrame = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(animationFrame);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      markerMap.get(-1)?.traverse((child) => {
+        if (child.name === 'closest-approach-target') child.scale.set(11, 11, 1);
+      });
+    };
   }, [globeReady, preparedFocusRecords, preparedThreats, replayActive, replayFrameRef, reviewPair, selectedEvent]);
 
   const orbitPathMinute = Math.floor(simulationTime / 300_000) * 5;

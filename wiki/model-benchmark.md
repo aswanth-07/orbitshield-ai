@@ -44,3 +44,15 @@ development laptop.
 The benchmark scores triage classes and does not produce calibrated collision
 probabilities. Public SOCRATES records lack the covariance history required by
 these CDM models.
+
+## Deployed public-feed model
+
+The hackathon workspace also deploys a reduced 37-tree Histogram Gradient
+Boosting model for named current events inside 48 hours. It uses time to TCA,
+current log10 probability, miss distance and relative speed. These fields have
+an explicit unit crosswalk between the ESA archive and SOCRATES feed.
+
+The event-held-out split contains 6,235 training events, 1,312 validation
+events and 1,341 test events. The stored 0.67 threshold gives 0.631 test F2,
+0.933 recall, 0.275 precision and 0.529 PR-AUC. This model favors recall for
+analyst triage. Its score is not collision probability.

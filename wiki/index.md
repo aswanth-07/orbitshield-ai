@@ -14,14 +14,16 @@ and an ESA CDM model pipeline.
 
 ## Frozen decisions
 
-- Public OMM and SOCRATES data provide current context and deterministic
-  screening. They do not stand in for operator CDM histories.
+- Public OMM and SOCRATES data provide current context, deterministic screening
+  and the four fields used by the deployed two-day triage model.
 - ESA or operator CDM sequences provide model inputs, uncertainty evidence, and
   held-out validation.
 - Event 9051 stays outside every training partition and supplies the judge
   replay.
-- Public screening rows remain candidates. OrbitShield raises an analyst alert
-  only when a compatible CDM sequence crosses the trained model threshold.
+- The deployed public-feature model raises a named analyst alert only for a
+  complete event inside 48 hours whose score crosses its trained threshold.
+- Rich operator CDM histories remain the professional model path for covariance
+  and sequence-aware inference.
 - The primary demonstration stays in one monitoring workspace: fleet, ML alert
   and candidate queues on the left, orbital picture in the centre, and risk
   analysis on the right.

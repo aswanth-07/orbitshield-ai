@@ -34,6 +34,8 @@ Use the repository environment instead of a global Python installation:
 .\.venv-ml\Scripts\python.exe -m py_compile .\ml\train_model.py
 .\.venv-ml\Scripts\python.exe .\ml\train_model.py
 .\.venv-ml\Scripts\python.exe .\ml\export_validation_replay.py
+.\.venv-ml\Scripts\python.exe -m py_compile .\ml\train_public_triage.py
+.\.venv-ml\Scripts\python.exe .\ml\train_public_triage.py
 ```
 
 Record event counts, split sizes, baseline metrics, model metrics, runtime, and
