@@ -10,7 +10,8 @@ status: active
 
 The application runs on Next.js 16 through Vinext with React 19 and TypeScript.
 Three.js and react-globe.gl render the Earth and encounter layers. satellite.js
-propagates OMM records in a worker so catalogue updates do not block the UI.
+propagates OMM and TLE records in a worker so catalogue updates do not block the
+UI.
 Prepared SGP4 records avoid reparsing orbital elements for every path sample or
 catalogue refresh. The layout preloads the bundled Earth texture so the globe
 does not wait for a second network discovery step.
@@ -23,8 +24,9 @@ responses. Each response labels its data as current, cached, or unavailable.
 `app/operations-workspace.tsx` owns the persistent three-part product view. The
 left rail derives monitored-satellite state and the automatic alert queue. The
 centre keeps the active catalogue, screened debris, monitored orbits and TCA
-replay in one WebGL scene. The right rail renders the grounded alert explanation,
-verified metrics, model coverage and analyst workflow.
+replay in one WebGL scene. The right rail renders either a selected object's
+verified profile or the grounded alert explanation, metrics, model coverage and
+analyst workflow.
 
 The replay clock writes verified SGP4 states to a shared frame reference. A
 WebGL animation loop moves only the selected pair and camera, so the monitoring
@@ -34,12 +36,19 @@ Prepared SGP4 records and cached Three.js marker geometry avoid repeated parsing
 and allocation. The worker allows one catalogue propagation in flight and
 retains only the newest queued time, which prevents replay requests from
 building a backlog. A red screen-facing target and label mark the computed
-closest-approach midpoint at TCA.
+public-element midpoint at TCA. Event paths use a bounded final twenty-minute
+window so repeated Earth-fixed ground tracks do not obscure the encounter. The
+protected path is solid red and the counterpart path is dashed red. Their first
+and last samples equal the displayed start time and TCA time.
 
 ## Public screening lane
 
-CelesTrak OMM records provide orbital elements for SGP4 context. SOCRATES
-records provide the displayed public conjunction metrics. Transparent rules
+CelesTrak OMM records provide orbital elements for SGP4 context. A small
+timestamped SatNOGS DB fixture supplies fresher public TLE fallback records for
+five monitored objects and identifies Space-Track.org as its element source.
+The remaining monitored object retains the normal catalogue fallback when that
+feed has no current TLE. SOCRATES records provide the displayed public
+conjunction metrics. Transparent rules
 assign Review, Watch, Low, or Needs data. Public geometry remains approximate,
 and the SOCRATES values remain authoritative for the event card. These rules
 raise the live close-approach alerts. They do not claim that the CDM model scored
@@ -69,10 +78,10 @@ using the authoritative SOCRATES miss range rather than fabricated geometry.
 
 ## Offline behavior
 
-Bundled catalogue, conjunction, threat, and ESA fixtures keep the complete
-judge path available without network access. Generated model artifacts stay
-outside Git. A small, source-labelled inference fixture may be committed when
-it records a real model run against the reserved event.
+Bundled catalogue, monitored-fleet TLE, conjunction, threat, and ESA fixtures
+keep the complete judge path available without network access. Generated model
+artifacts stay outside Git. A small, source-labelled inference fixture may be
+committed when it records a real model run against the reserved event.
 
 ## Stable contracts
 

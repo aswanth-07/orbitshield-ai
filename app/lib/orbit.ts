@@ -5,6 +5,7 @@ import {
   gstime,
   json2satrec,
   propagate,
+  twoline2satrec,
 } from 'satellite.js';
 import type { OmmRecord, OrbitPath, PropagatedObject } from './types';
 
@@ -21,7 +22,10 @@ export function catalogId(record: OmmRecord) {
 
 export function prepareOmm(record: OmmRecord): PreparedOmm | null {
   try {
-    return { record, satrec: json2satrec(record as Parameters<typeof json2satrec>[0]) };
+    const satrec = record.TLE_LINE1 && record.TLE_LINE2
+      ? twoline2satrec(record.TLE_LINE1, record.TLE_LINE2)
+      : json2satrec(record as Parameters<typeof json2satrec>[0]);
+    return { record, satrec };
   } catch {
     return null;
   }
@@ -66,6 +70,32 @@ export function sampleOrbitPath(
   const points = Array.from({ length: samples }, (_, index) => {
     const date = new Date(start + (index / (samples - 1)) * periodMs);
     return prepared ? propagatePreparedOmm(prepared, date) : null;
+  })
+    .filter((point): point is PropagatedObject => Boolean(point))
+    .map(({ lat, lng, altitude }) => ({ lat, lng, altitude }));
+
+  return {
+    catalogId: catalogId(record),
+    name: record.OBJECT_NAME,
+    color,
+    points,
+  };
+}
+
+export function sampleOrbitSegment(
+  record: OmmRecord,
+  start: Date,
+  end: Date,
+  color: string,
+  samples = 120,
+): OrbitPath {
+  const prepared = prepareOmm(record);
+  const startTime = start.getTime();
+  const endTime = end.getTime();
+  const sampleCount = Math.max(2, samples);
+  const points = Array.from({ length: sampleCount }, (_, index) => {
+    const timestamp = startTime + (index / (sampleCount - 1)) * (endTime - startTime);
+    return prepared ? propagatePreparedOmm(prepared, new Date(timestamp)) : null;
   })
     .filter((point): point is PropagatedObject => Boolean(point))
     .map(({ lat, lng, altitude }) => ({ lat, lng, altitude }));

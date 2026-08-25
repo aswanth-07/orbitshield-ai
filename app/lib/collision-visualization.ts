@@ -1,6 +1,9 @@
 import type { DebrisSize, ThreatObject } from './types';
 
-export const SATELLITE_COLOR = '#64ff88';
+export const CATALOG_SATELLITE_COLOR = '#64ff88';
+export const MONITORED_SATELLITE_COLOR = '#35d7ff';
+export const RISK_ORBIT_COLOR = '#ff4452';
+export const SATELLITE_COLOR = CATALOG_SATELLITE_COLOR;
 
 export const DEBRIS_COLORS: Record<DebrisSize, string> = {
   small: '#a979ff',
@@ -9,7 +12,7 @@ export const DEBRIS_COLORS: Record<DebrisSize, string> = {
   unknown: '#9aa7b0',
 };
 
-export type OrbitVisualRole = 'watchlist' | 'selected-satellite' | 'paired-object' | 'cpa-link' | 'depth-guide';
+export type OrbitVisualRole = 'watchlist' | 'selected-satellite' | 'protected-risk' | 'paired-object' | 'cpa-link' | 'depth-guide';
 
 export type OrbitVisualStyle = {
   color: string;
@@ -38,18 +41,21 @@ export function countDebrisBySize(objects: ThreatObject[]) {
 
 export function orbitVisualStyle(role: OrbitVisualRole, pairedColor = DEBRIS_COLORS.unknown): OrbitVisualStyle {
   if (role === 'selected-satellite') {
-    return { color: SATELLITE_COLOR, stroke: 1.2, dashLength: 1, dashGap: 0, dashAnimateTime: 0 };
+    return { color: MONITORED_SATELLITE_COLOR, stroke: 1.2, dashLength: 1, dashGap: 0, dashAnimateTime: 0 };
+  }
+  if (role === 'protected-risk') {
+    return { color: RISK_ORBIT_COLOR, stroke: 1.35, dashLength: 1, dashGap: 0, dashAnimateTime: 0 };
   }
   if (role === 'paired-object') {
-    return { color: pairedColor, stroke: 1, dashLength: 0.055, dashGap: 0.025, dashAnimateTime: 2600 };
+    return { color: RISK_ORBIT_COLOR, stroke: 1.15, dashLength: 0.055, dashGap: 0.025, dashAnimateTime: 1800 };
   }
   if (role === 'cpa-link') {
-    return { color: '#f4f7f9', stroke: 0.7, dashLength: 0.025, dashGap: 0.015, dashAnimateTime: 900 };
+    return { color: '#ff7983', stroke: 0.7, dashLength: 0.025, dashGap: 0.015, dashAnimateTime: 900 };
   }
   if (role === 'depth-guide') {
     return { color: pairedColor, stroke: 0.42, dashLength: 0.018, dashGap: 0.015, dashAnimateTime: 0 };
   }
-  return { color: 'rgba(100,255,136,0.72)', stroke: 0.62, dashLength: 1, dashGap: 0, dashAnimateTime: 0 };
+  return { color: 'rgba(53,215,255,0.72)', stroke: 0.7, dashLength: 1, dashGap: 0, dashAnimateTime: 0 };
 }
 
 export function tcaAnimationFrame(from: number, to: number, elapsed: number, duration: number) {

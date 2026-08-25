@@ -9,9 +9,10 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import replayFixture from './data/esa-validation-replay.json';
+import fleetOrbitFixture from './data/fleet-orbits.snapshot.json';
 import benchmarkFixture from './data/model-benchmark.json';
 import {
-  animateTcaReplay, isSatelliteObjectType, objectMarkerColor,
+  animateTcaReplay, isSatelliteObjectType,
   TCA_REPLAY_DURATION_MS, tcaReplayStart, type TcaReplayFrame, type TcaReplayPhase,
 } from './lib/collision-visualization';
 import { explainConjunction } from './lib/explanations';
@@ -30,6 +31,11 @@ const OrbitGlobe = dynamic(() => import('./orbit-globe'), {
 });
 
 const modelReplay = replayFixture as T2ModelReplay;
+const fleetOrbitSnapshot = fleetOrbitFixture as {
+  source: string;
+  elementSource: string;
+  objects: Array<{ catalogId: number; epoch: string; tleLine1: string; tleLine2: string }>;
+};
 const modelBenchmark = benchmarkFixture as ModelBenchmark;
 const benchmarkChampion = modelBenchmark.models.find((model) => model.id === modelBenchmark.championModelId)!;
 const fleetIds = INDIA_EO_FLEET.objects.map((item) => item.catalogId);
@@ -116,7 +122,8 @@ export default function OperationsWorkspace() {
   const [replayActive, setReplayActive] = useState(false);
   const [replayPhase, setReplayPhase] = useState<TcaReplayPhase | null>(null);
   const [replaySpeed, setReplaySpeed] = useState(0);
-  const [catalogueVisible, setCatalogueVisible] = useState(false);
+  const [catalogueVisible, setCatalogueVisible] = useState(true);
+  const [trajectoryStartTime, setTrajectoryStartTime] = useState<number | null>(null);
   const simulationRef = useRef(0);
   const lastTick = useRef(0);
   const replayCancel = useRef<(() => void) | null>(null);
@@ -191,6 +198,17 @@ export default function OperationsWorkspace() {
     const map = new Map<number, OmmRecord>();
     catalog?.objects.forEach((record) => map.set(Number(record.NORAD_CAT_ID), record));
     threats?.objects.forEach((threat) => { if (threat.record) map.set(threat.catalogId, threat.record); });
+    fleetOrbitSnapshot.objects.forEach((orbit) => {
+      const record = map.get(orbit.catalogId);
+      if (!record) return;
+      map.set(orbit.catalogId, {
+        ...record,
+        EPOCH: orbit.epoch,
+        TLE_LINE1: orbit.tleLine1,
+        TLE_LINE2: orbit.tleLine2,
+        ORBIT_SOURCE: `${fleetOrbitSnapshot.source} · ${fleetOrbitSnapshot.elementSource}`,
+      });
+    });
     extraRecords.forEach((record) => map.set(Number(record.NORAD_CAT_ID), record));
     return map;
   }, [catalog, extraRecords, threats]);
@@ -210,6 +228,13 @@ export default function OperationsWorkspace() {
     setReplayActive(false);
     setReplayPhase(null);
     const protectedId = chooseProtectedId(event);
+    const tcaTime = new Date(event.tca).getTime();
+    const currentTime = simulationRef.current || Date.now();
+    const approachStart = Number.isFinite(tcaTime) ? tcaReplayStart(currentTime, tcaTime) : currentTime;
+    setTrajectoryStartTime(Number.isFinite(tcaTime) ? approachStart : null);
+    simulationRef.current = approachStart;
+    setSimulationTime(approachStart);
+    setPlaying(false);
     setSelectedEventId(event.id);
     setSelectedSatelliteId(protectedId);
     setCameraMode('pair-follow');
@@ -236,15 +261,22 @@ export default function OperationsWorkspace() {
   const selectedProtectedId = selectedEvent ? selectedSatelliteId ?? chooseProtectedId(selectedEvent) : selectedSatelliteId;
   const selectedCounterpart = selectedEvent && selectedProtectedId ? counterpartFor(selectedEvent, selectedProtectedId) : null;
   const selectedThreat = selectedCounterpart ? threatsById.get(selectedCounterpart.id) : undefined;
-  const selectedSatellite = selectedSatelliteId ? INDIA_EO_FLEET.objects.find((item) => item.catalogId === selectedSatelliteId) : undefined;
+  const selectedFleetSatellite = selectedSatelliteId ? INDIA_EO_FLEET.objects.find((item) => item.catalogId === selectedSatelliteId) : undefined;
+  const selectedRecord = selectedSatelliteId ? recordMap.get(selectedSatelliteId) : undefined;
+  const selectedObjectThreat = selectedSatelliteId ? threatsById.get(selectedSatelliteId) : undefined;
+  const selectedObjectName = selectedRecord?.OBJECT_NAME ?? selectedObjectThreat?.name ?? selectedFleetSatellite?.name;
+  const selectedObjectEvents = useMemo(() => selectedSatelliteId
+    ? rankedEvents.filter((event) => event.primaryCatalogId === selectedSatelliteId || event.secondaryCatalogId === selectedSatelliteId)
+    : [], [rankedEvents, selectedSatelliteId]);
   const explanation = selectedEvent ? explainConjunction(selectedEvent) : null;
   const focusRecords = useMemo(() => {
     const ids = new Set([
       ...fleetIds,
       ...(selectedEvent ? [selectedEvent.primaryCatalogId, selectedEvent.secondaryCatalogId] : []),
+      ...(selectedSatelliteId ? [selectedSatelliteId] : []),
     ]);
     return [...ids].flatMap((id) => recordMap.get(id) ?? []);
-  }, [recordMap, selectedEvent]);
+  }, [recordMap, selectedEvent, selectedSatelliteId]);
 
   const cancelReplay = useCallback(() => {
     replayCancel.current?.();
@@ -262,6 +294,7 @@ export default function OperationsWorkspace() {
     const target = new Date(selectedEvent.tca).getTime();
     if (!Number.isFinite(target)) return;
     const from = tcaReplayStart(simulationRef.current, target);
+    setTrajectoryStartTime(from);
     simulationRef.current = from;
     setSimulationTime(from);
     setPlaying(false);
@@ -316,6 +349,7 @@ export default function OperationsWorkspace() {
   function selectFleetSatellite(catalogId: number) {
     cancelReplay();
     setSelectedEventId(null);
+    setTrajectoryStartTime(null);
     setSelectedSatelliteId(catalogId);
     setCameraMode('follow');
     setCameraResetKey((value) => value + 1);
@@ -324,10 +358,14 @@ export default function OperationsWorkspace() {
   function returnLive() {
     cancelReplay();
     const now = Date.now();
+    setSelectedEventId(null);
+    setTrajectoryStartTime(null);
     simulationRef.current = now;
     setSimulationTime(now);
     setPlaying(true);
     setSpeed(1);
+    setCameraMode(selectedSatelliteId ? 'follow' : 'global');
+    setCameraResetKey((value) => value + 1);
   }
 
   const alertCount = rankedEvents.filter((event) => event.priority === 'review' || event.priority === 'watch').length;
@@ -394,6 +432,8 @@ export default function OperationsWorkspace() {
           previewId={null}
           focusCatalogId={selectedSatelliteId}
           simulationTime={simulationTime}
+          contextTime={selectedEvent ? lastRefresh || clock : clock}
+          trajectoryStartTime={trajectoryStartTime}
           showCatalogue={catalogueVisible}
           focusSelectedOnly={false}
           showFleetLabels={!replayActive}
@@ -404,11 +444,11 @@ export default function OperationsWorkspace() {
         />
         <div className="ops-globe-status">
           <span><i /> LIVE ORBITAL PICTURE</span>
-          <strong>{selectedEvent ? `${cleanName(selectedEvent.primaryName)} ↔ ${cleanName(selectedEvent.secondaryName)}` : selectedSatellite?.name ?? 'Fleet overview'}</strong>
-          <small>{selectedEvent ? `${priorityLabels[selectedEvent.priority]} alert · ${countdown(selectedEvent.tca, simulationTime)}` : 'Select a monitored satellite or alert'}</small>
+          <strong>{selectedEvent ? `${cleanName(selectedEvent.primaryName)} ↔ ${cleanName(selectedEvent.secondaryName)}` : selectedObjectName ?? 'Fleet overview'}</strong>
+          <small>{selectedEvent ? `${priorityLabels[selectedEvent.priority]} alert · ${replayActive ? countdown(selectedEvent.tca, simulationTime) : 'propagated final 20-minute approach'}` : selectedRecord ? `${fleetIds.includes(Number(selectedRecord.NORAD_CAT_ID)) ? 'Monitored' : 'Catalogue'} satellite · NORAD ${selectedRecord.NORAD_CAT_ID}` : 'Select any satellite or alert'}</small>
         </div>
-        <div className="ops-layer-legend"><span><i className="sat" /> Monitored satellites</span><span><i className="debris" /> Screened debris</span><span><i className="orbit" /> Propagated orbit</span></div>
-        {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected satellite orbit</span><span><i className="counterpart" style={{ borderColor: objectMarkerColor(selectedThreat?.objectType, selectedThreat?.size) }} /> Counterpart orbit</span><span><i className="tca-target" /> Red target marks closest approach</span></div>}
+        <div className="ops-layer-legend"><span><i className="catalog" /> Catalogue satellites</span><span><i className="sat" /> Monitored satellites</span><span><i className="debris" /> Screened debris</span><span><i className="orbit" /> Monitored orbits</span></div>
+        {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected approach to TCA</span><span><i className="counterpart" /> Counterpart approach to TCA</span><span><i className="tca-target" /> Closest approach</span></div>}
         {selectedEvent && selectedProtectedId && replayPhase === 'encounter' && <EncounterOverlay event={selectedEvent} protectedId={selectedProtectedId} threat={selectedThreat} />}
         <div className="ops-globe-controls">
           <div className="ops-time-control"><button onClick={() => { cancelReplay(); setPlaying((value) => !value); }} aria-label={playing ? 'Pause orbital animation' : 'Play orbital animation'}>{playing ? <Pause size={14} /> : <Play size={14} />}</button><select value={speed} onChange={(event) => setSpeed(Number(event.target.value))} aria-label="Orbital animation speed"><option value={1}>1×</option><option value={10}>10×</option><option value={60}>60×</option></select><span>{dateUtc(new Date(simulationTime).toISOString(), true)}</span></div>
@@ -419,7 +459,7 @@ export default function OperationsWorkspace() {
       </section>
 
       <aside className="ops-analysis-rail">
-        <div className="ops-analysis-heading"><div><span><Sparkles size={13} /> ORBITSHIELD ANALYST</span><strong>Risk analysis</strong></div><b><Bot size={14} /> AUTOMATED</b></div>
+        <div className="ops-analysis-heading"><div><span><Sparkles size={13} /> ORBITSHIELD ANALYST</span><strong>{selectedEvent ? 'Risk analysis' : selectedRecord ? 'Object profile' : 'Risk analysis'}</strong></div><b>{selectedEvent ? <><Bot size={14} /> AUTOMATED</> : selectedRecord ? <><Database size={14} /> CATALOGUE</> : <><Radar size={14} /> MONITORING</>}</b></div>
         {selectedEvent && explanation && selectedCounterpart ? <>
           <section className={`ops-current-alert ${selectedEvent.priority}`}>
             <div><span><TriangleAlert size={13} /> AI-ASSISTED ALERT</span><b className={selectedEvent.priority}>{priorityLabels[selectedEvent.priority]}</b></div>
@@ -455,7 +495,28 @@ export default function OperationsWorkspace() {
 
           <button className="ops-primary-action" onClick={runTcaReplay} disabled={replayActive}><Crosshair size={16} /><span><strong>{replayActive ? 'Following the encounter' : 'Visualize this alert'}</strong><small>{replayActive ? `Replay running at about ${Math.round(replaySpeed)}×` : 'Track the satellite and debris to TCA'}</small></span></button>
           <p className="ops-safety-note"><ShieldCheck size={13} /> OrbitShield recommends review steps, never manoeuvres. Qualified mission personnel retain every operational decision.</p>
-        </> : <div className="ops-no-alert ops-monitoring-overview"><Radar size={25} /><strong>Fleet monitoring is active</strong><p>Six India Earth Observation satellites are propagating on the globe. Select a satellite to follow its orbit or choose an alert to open the risk analysis.</p><div><span><b>{fleetIds.length}</b> monitored satellites</span><span><b>{alertCount}</b> watch or review alerts</span><span><b>{threats?.positionedCount ?? 0}</b> risk objects mapped</span></div><section className="ops-benchmark-summary"><span>FIVE-MODEL T−2 LAB</span><strong>{modelBenchmark.championModelName}</strong><small>Champion selected on validation F2 · event {modelBenchmark.dataset.reservedEventId} excluded</small><div><b>{benchmarkChampion.validation.f2.toFixed(3)}<em>VAL F2</em></b><b>{benchmarkChampion.test.f2.toFixed(3)}<em>TEST F2</em></b><b>{(benchmarkChampion.test.recall * 100).toFixed(1)}%<em>RECALL</em></b></div></section></div>}
+        </> : selectedRecord && selectedSatelliteId ? <div className="ops-object-profile">
+          <section className="ops-object-identity">
+            <span><Satellite size={14} /> {fleetIds.includes(selectedSatelliteId) ? 'MONITORED SATELLITE' : 'ACTIVE CATALOGUE SATELLITE'}</span>
+            <strong>{cleanName(selectedRecord.OBJECT_NAME)}</strong>
+            <small>NORAD {selectedSatelliteId} · {selectedRecord.OBJECT_ID || 'International designator unavailable'}</small>
+          </section>
+          <p className="ops-object-summary">{selectedFleetSatellite
+            ? `${selectedFleetSatellite.name} is monitored as part of the India Earth Observation fleet. Mission focus: ${selectedFleetSatellite.mission}.`
+            : `${cleanName(selectedRecord.OBJECT_NAME)} is an active public-catalogue payload. OrbitShield shows verified orbital metadata and its current SGP4 position without treating it as part of the monitored fleet.`}</p>
+          <section className="ops-object-grid">
+            <div><span>Object type</span><strong>{selectedRecord.OBJECT_TYPE || selectedObjectThreat?.objectType || 'Payload'}</strong></div>
+            <div><span>Owner code</span><strong>{selectedRecord.COUNTRY_CODE || selectedObjectThreat?.owner || 'Unavailable'}</strong></div>
+            <div><span>Launch date</span><strong>{selectedRecord.LAUNCH_DATE || 'Unavailable'}</strong></div>
+            <div><span>Inclination</span><strong>{Number.isFinite(Number(selectedRecord.INCLINATION)) ? `${Number(selectedRecord.INCLINATION).toFixed(2)}°` : 'Unavailable'}</strong></div>
+            <div><span>Orbit period</span><strong>{Number(selectedRecord.MEAN_MOTION) > 0 ? `${(1_440 / Number(selectedRecord.MEAN_MOTION)).toFixed(1)} min` : 'Unavailable'}</strong></div>
+            <div><span>Known alerts</span><strong>{selectedObjectEvents.length}</strong></div>
+          </section>
+          <section className="ops-object-source">
+            <div className="ops-section-label"><span>ORBIT RECORD</span><b><ShieldCheck size={11} /> VERIFIED FIELDS</b></div>
+            <p>Element epoch: {dateUtc(selectedRecord.EPOCH, true)}. Position and orbit are propagated from this public {selectedRecord.TLE_LINE1 ? 'TLE' : 'OMM'} record using SGP4. Source: {selectedRecord.ORBIT_SOURCE ?? catalog?.source ?? 'public GP catalogue'}.</p>
+          </section>
+        </div> : <div className="ops-no-alert ops-monitoring-overview"><Radar size={25} /><strong>Fleet monitoring is active</strong><p>Blue satellites belong to the monitored India fleet. Green satellites provide public catalogue context. Select any satellite for its profile or choose an alert for risk analysis.</p><div><span><b>{fleetIds.length}</b> monitored satellites</span><span><b>{alertCount}</b> watch or review alerts</span><span><b>{threats?.positionedCount ?? 0}</b> risk objects mapped</span></div><section className="ops-benchmark-summary"><span>FIVE-MODEL T−2 LAB</span><strong>{modelBenchmark.championModelName}</strong><small>Champion selected on validation F2 · event {modelBenchmark.dataset.reservedEventId} excluded</small><div><b>{benchmarkChampion.validation.f2.toFixed(3)}<em>VAL F2</em></b><b>{benchmarkChampion.test.f2.toFixed(3)}<em>TEST F2</em></b><b>{(benchmarkChampion.test.recall * 100).toFixed(1)}%<em>RECALL</em></b></div></section></div>}
       </aside>
     </section>
   </main>;

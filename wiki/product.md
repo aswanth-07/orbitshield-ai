@@ -13,14 +13,18 @@ and a controlled escalation workflow.
 
 ## Judge workflow
 
-1. The application opens with six monitored satellites, automatic source
-   refresh, six solid green orbits, and a ranked alert queue.
-2. The judge selects a satellite to follow or an alert to inspect. OrbitShield
-   keeps the rest of the orbital picture visible for context.
+1. The application opens with automatic source refresh, green public-catalogue
+   satellites, six blue monitored satellites and orbits, and a ranked alert
+   queue.
+2. The judge can select any satellite for a concise verified profile or select
+   an alert to inspect. OrbitShield keeps the orbital picture visible for
+   context.
 3. The right rail explains what is happening, why the alert fired, the verified
    metrics, the model coverage state, and the next review steps.
-4. Accelerated TCA follow keeps the protected satellite and counterpart visible
-   while time advances to a red closest-approach target.
+4. Alert selection frames the final twenty-minute approach. A solid red
+   protected path and dashed red counterpart path start at their displayed SGP4
+   positions and end at the circled TCA geometry. Accelerated follow keeps the
+   pair visible while time advances.
 5. Inline model evidence compares five trained families and shows the held-out
    ESA validation result without presenting it as the score for a public
    SOCRATES event.

@@ -3,11 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   animateToTca,
   animateTcaReplay,
+  CATALOG_SATELLITE_COLOR,
   countDebrisBySize,
   DEBRIS_COLORS,
   isSatelliteObjectType,
+  MONITORED_SATELLITE_COLOR,
   objectMarkerColor,
   orbitVisualStyle,
+  RISK_ORBIT_COLOR,
   SATELLITE_COLOR,
   TCA_REPLAY_DURATION_MS,
   TCA_REPLAY_WINDOW_MS,
@@ -54,7 +57,10 @@ function fakeScheduler() {
 }
 
 describe('collision visualization rules', () => {
-  it('keeps payload markers bright green and size-colors only non-payload objects', () => {
+  it('keeps catalogue payload markers green and size-colors only non-payload objects', () => {
+    expect(CATALOG_SATELLITE_COLOR).toBe('#64ff88');
+    expect(MONITORED_SATELLITE_COLOR).toBe('#35d7ff');
+    expect(RISK_ORBIT_COLOR).toBe('#ff4452');
     expect(SATELLITE_COLOR).toBe('#64ff88');
     expect(isSatelliteObjectType('PAY')).toBe(true);
     expect(isSatelliteObjectType('payload')).toBe(true);
@@ -73,18 +79,21 @@ describe('collision visualization rules', () => {
     ])).toEqual({ small: 1, medium: 0, large: 1, unknown: 1 });
   });
 
-  it('uses visible green watchlist paths, a solid selected satellite path, and depth guides', () => {
+  it('uses blue monitored paths and red solid and dashed risk paths', () => {
     const watchlist = orbitVisualStyle('watchlist');
     const selected = orbitVisualStyle('selected-satellite');
+    const protectedRisk = orbitVisualStyle('protected-risk');
     const paired = orbitVisualStyle('paired-object', DEBRIS_COLORS.medium);
     const depthGuide = orbitVisualStyle('depth-guide', DEBRIS_COLORS.medium);
-    expect(watchlist.color).toContain('100,255,136');
+    expect(watchlist.color).toContain('53,215,255');
     expect(watchlist.stroke).toBeGreaterThan(0.5);
     expect(watchlist.dashGap).toBe(0);
-    expect(selected.color).toBe(SATELLITE_COLOR);
+    expect(selected.color).toBe(MONITORED_SATELLITE_COLOR);
     expect(selected.dashGap).toBe(0);
     expect(selected.stroke).toBeGreaterThan(watchlist.stroke);
-    expect(paired.color).toBe(DEBRIS_COLORS.medium);
+    expect(protectedRisk.color).toBe(RISK_ORBIT_COLOR);
+    expect(protectedRisk.dashGap).toBe(0);
+    expect(paired.color).toBe(RISK_ORBIT_COLOR);
     expect(paired.dashGap).toBeGreaterThan(0);
     expect(depthGuide.color).toBe(DEBRIS_COLORS.medium);
     expect(depthGuide.dashGap).toBeGreaterThan(0);

@@ -24,6 +24,9 @@ export type OmmRecord = {
   COUNTRY_CODE?: string;
   LAUNCH_DATE?: string;
   DECAY_DATE?: string | null;
+  TLE_LINE1?: string;
+  TLE_LINE2?: string;
+  ORBIT_SOURCE?: string;
 };
 
 export type PropagatedObject = {
@@ -307,7 +310,7 @@ export type OrbitPath = {
   catalogId: number;
   name: string;
   color: string;
-  role?: 'watchlist' | 'selected-satellite' | 'paired-object' | 'cpa-link' | 'depth-guide';
+  role?: 'watchlist' | 'selected-satellite' | 'protected-risk' | 'paired-object' | 'cpa-link' | 'depth-guide';
   stroke?: number;
   dashLength?: number;
   dashGap?: number;
