@@ -31,6 +31,7 @@ type OrbitGlobeProps = {
   previewId: number | null;
   focusCatalogId: number | null;
   simulationTime: number;
+  playbackRate?: number;
   contextTime?: number;
   trajectoryStartTime?: number | null;
   showCatalogue: boolean;
@@ -155,6 +156,7 @@ export default function OrbitGlobe({
   previewId,
   focusCatalogId,
   simulationTime,
+  playbackRate = 1,
   contextTime = simulationTime,
   trajectoryStartTime = null,
   showCatalogue,
@@ -181,8 +183,10 @@ export default function OrbitGlobe({
   const [size, setSize] = useState({ width: 900, height: 700 });
   const [cataloguePoints, setCataloguePoints] = useState<PropagatedObject[]>([]);
   const [globeReady, setGlobeReady] = useState(false);
-  const catalogueTime = Math.floor(contextTime / 10_000) * 10_000;
-  const backgroundTime = Math.floor(contextTime / 2_000) * 2_000;
+  const catalogueBucketMs = playbackRate >= 60 ? 60_000 : playbackRate >= 10 ? 30_000 : 10_000;
+  const backgroundBucketMs = playbackRate >= 60 ? 5_000 : 2_000;
+  const catalogueTime = Math.floor(contextTime / catalogueBucketMs) * catalogueBucketMs;
+  const backgroundTime = Math.floor(contextTime / backgroundBucketMs) * backgroundBucketMs;
 
   const requestCataloguePropagation = useCallback((timestamp: number) => {
     const worker = workerRef.current;

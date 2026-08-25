@@ -1,5 +1,10 @@
 export const IST_TIME_ZONE = 'Asia/Kolkata';
 
+export function advanceSimulationTime(currentTime: number, elapsedRealMs: number, speed: number) {
+  if (!Number.isFinite(currentTime) || !Number.isFinite(elapsedRealMs) || !Number.isFinite(speed)) return currentTime;
+  return currentTime + Math.max(0, elapsedRealMs) * Math.max(0, speed);
+}
+
 export function formatIst(
   value: string | number | Date | null | undefined,
   options: { seconds?: boolean; year?: boolean } = {},

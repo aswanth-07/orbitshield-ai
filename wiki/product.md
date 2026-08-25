@@ -26,12 +26,15 @@ only elevated results into analyst alerts with an evidence brief.
    positions and end at the circled TCA geometry. Accelerated follow keeps the
    pair visible while time advances.
 5. The real-time CDM card explains the message format and listens for an
-   operator feed. The judge can use the labelled ESA test feed to send nine
-   held-out messages through the same ingestion contract. The score updates
-   after each arrival, exposes feature coverage, and reveals the recorded
-   outcome only after inference completes.
+   operator feed. The labelled ESA validation pair starts automatically and
+   sends nine held-out messages through the same ingestion contract. The score
+   updates after each arrival and exposes feature coverage.
 6. When the trained score crosses its threshold, the left rail receives an ML
-   risk alert. A connected feed can supply the absolute TCA for display in IST.
+   risk alert for ESA Mission 1. Clicking it starts a magnified R–T–N replay of
+   the CDM-reported final twenty-second approach to its 67-metre closest point.
+7. The 1x, 10x and 60x controls drive the simulation timestamp and every global
+   orbital layer. A connected feed can supply the absolute TCA for display in
+   IST.
 
 ## Customer and value
 

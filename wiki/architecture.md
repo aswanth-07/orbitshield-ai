@@ -32,6 +32,10 @@ The replay clock writes verified SGP4 states to a shared frame reference. A
 WebGL animation loop moves only the selected pair and camera, so the monitoring
 rails do not render on every frame. Monitored background objects, screened
 debris and the optional full catalogue use separate slower time buckets.
+The global simulation clock advances every 100 milliseconds and supplies the
+catalogue, monitored fleet and risk-object layers. Explicit 1x, 10x and 60x
+controls set that multiplier. Adaptive catalogue buckets cap worker requests at
+high speed while the visible fleet follows the accelerated clock.
 Prepared SGP4 records and cached Three.js marker geometry avoid repeated parsing
 and allocation. The worker allows one catalogue propagation in flight and
 retains only the newest queued time, which prevents replay requests from
@@ -91,11 +95,20 @@ Standard Time. The ESA archive provides a relative T-minus timeline but no
 trustworthy absolute event time, so the test feed states that limit.
 
 The main workspace starts in a listening state. A connected operator feed is
-labelled `OPERATOR FEED`. When no external provider is configured, the judge can
-run a labelled ESA test feed that sends the nine visible messages from held-out
-event 9051 through the same ingestion route. The recorded final message remains
-hidden until the test stream completes. Public SOCRATES events stay separate
-and retain `Awaiting CDM` because their fields cannot satisfy this contract.
+labelled `OPERATOR FEED`. When no external provider is configured, the labelled
+ESA validation pair starts automatically and sends the nine visible messages
+from held-out event 9051 through the same ingestion route. The route
+deduplicates test messages by `time_to_tca`, so reloads preserve one nine-CDM
+sequence. The UI labels its anonymized target as ESA Mission 1 and its encounter
+object as 9051-C. Public SOCRATES events stay separate and retain `Awaiting CDM`
+because their fields cannot satisfy this contract.
+
+Selecting the model alert opens a 6.5-second R–T–N replay. The replay uses the
+latest evidence available before the T-2 cutoff: its reported miss vector and
+relative velocity define a local linear final twenty-second approach. A red
+ring marks the reported 67-metre closest point. The interface uses a logarithmic
+distance scale and states that the scene is magnified. It does not place the
+anonymized event on the Earth globe.
 
 The accelerated TCA replay uses a fixed twenty-minute window and a 6.5-second
 presentation duration. Camera phases follow the protected object, acquire the

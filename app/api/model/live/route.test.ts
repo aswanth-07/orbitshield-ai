@@ -49,4 +49,12 @@ describe('/api/model/live', () => {
     const body = await response.json();
     expect(body.feed.tca).toBe('2026-08-27T09:05:00.000Z');
   });
+
+  it('deduplicates repeated held-out feed messages after a reload', async () => {
+    await POST(request(streamFixture.messages[0], true));
+    const repeated = await POST(request(streamFixture.messages[0]));
+    const body = await repeated.json();
+    expect(body.feed.messagesReceived).toBe(1);
+    expect(body.inference.messagesSeen).toBe(1);
+  });
 });

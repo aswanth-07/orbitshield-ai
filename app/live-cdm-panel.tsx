@@ -1,7 +1,7 @@
 'use client';
 
 import { CheckCircle2, Database, LockKeyhole, Play, Radio, RotateCcw, ShieldCheck } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import streamFixture from './data/live-cdm-stream.json';
 import type { LiveCdmMessage, LiveModelResponse } from './lib/live-model';
@@ -21,11 +21,12 @@ function modelProbability(logRisk: number | null) {
   return logRisk === null ? 'Unavailable' : (10 ** logRisk).toExponential(3);
 }
 
-export default function LiveCdmPanel({ compact = false }: { compact?: boolean }) {
+export default function LiveCdmPanel({ compact = false, autoStart = false }: { compact?: boolean; autoStart?: boolean }) {
   const [running, setRunning] = useState(false);
   const [nextTestIndex, setNextTestIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [result, setResult] = useState<LiveModelResponse | null>(null);
+  const autoStarted = useRef(false);
   const received = result?.feed?.messagesReceived ?? 0;
   const testFeed = result?.feed?.mode === 'held-out-test-feed';
   const externalFeed = result?.feed?.mode === 'external-operator';
@@ -79,6 +80,17 @@ export default function LiveCdmPanel({ compact = false }: { compact?: boolean })
     return () => window.clearTimeout(timer);
   }, [nextTestIndex, running]);
 
+  useEffect(() => {
+    if (!autoStart || autoStarted.current || running || result?.status !== 'listening') return;
+    autoStarted.current = true;
+    const timer = window.setTimeout(() => {
+      setRevealed(false);
+      setNextTestIndex(0);
+      setRunning(true);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [autoStart, result?.status, running]);
+
   function start() {
     setRevealed(false);
     setNextTestIndex(0);
@@ -88,7 +100,7 @@ export default function LiveCdmPanel({ compact = false }: { compact?: boolean })
   const title = externalFeed
     ? `Operator event ${result.feed?.eventId}`
     : testFeed
-      ? `ESA test event ${result.feed?.eventId}`
+      ? `ESA Mission 1 · event ${result.feed?.eventId}`
       : 'Connector waiting for a CDM';
   const badge = running ? 'TEST STREAM' : externalFeed ? 'OPERATOR FEED' : testFeed ? (completeScored ? 'TEST COMPLETE' : 'TEST FEED') : 'LISTENING';
 

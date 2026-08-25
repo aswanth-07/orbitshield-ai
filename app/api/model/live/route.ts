@@ -96,9 +96,12 @@ export async function POST(request: NextRequest) {
 
     const existing = runtimeState[stateKey];
     const reset = body.reset === true || !existing || existing.eventId !== body.eventId;
-    const messages = reset ? [] : existing.messages;
-    if (messages.length >= 64) return NextResponse.json({ error: 'The live event already contains 64 messages.' }, { status: 409 });
     const mode: FeedMode = body.mode === 'held-out-test-feed' ? 'held-out-test-feed' : 'external-operator';
+    const messages = reset ? [] : existing.messages;
+    const updatedMessages = mode === 'held-out-test-feed'
+      ? [...messages.filter((message) => message.time_to_tca !== body.message.time_to_tca), body.message]
+      : [...messages, body.message];
+    if (updatedMessages.length > 64) return NextResponse.json({ error: 'The live event already contains 64 messages.' }, { status: 409 });
     const parsedTca = typeof body.tca === 'string' && Number.isFinite(new Date(body.tca).getTime())
       ? new Date(body.tca).toISOString()
       : null;
@@ -107,7 +110,7 @@ export async function POST(request: NextRequest) {
       source: typeof body.source === 'string' ? body.source : 'Connected CDM provider',
       mode,
       tca: parsedTca ?? (reset ? null : existing?.tca ?? null),
-      messages: [...messages, body.message],
+      messages: updatedMessages,
       updatedAt: new Date().toISOString(),
     };
     runtimeState[stateKey] = next;

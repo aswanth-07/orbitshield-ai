@@ -5,9 +5,9 @@ OrbitShield is an ML conjunction-risk workspace for small satellite teams. Publi
 The hackathon demonstration keeps two evidence lanes in one persistent product view:
 
 - **Public candidate intake:** CelesTrak OMM context, SOCRATES metrics, transparent Review/Watch/Low screening priorities, and six India Earth Observation missions. These rows are candidates, not ML alerts.
-- **ML risk prediction:** five event-held-out model families trained on ESA CDM histories. Histogram Gradient Boosting leads validation F2 and scores each compatible CDM sequence through the live endpoint. The alert rail is driven by this model result.
+- **ML risk prediction:** five event-held-out model families trained on ESA CDM histories. Histogram Gradient Boosting leads validation F2 and scores each compatible CDM sequence through the live endpoint. The held-out ESA Mission 1 pair starts automatically, receives nine unique CDMs and raises one model-driven elevated alert.
 
-The central globe opens on the monitored fleet and screened debris; the larger active catalogue is available from the optional Context control. SGP4 propagation animates the orbital picture. The accelerated follow compresses a 20-minute encounter window into 6.5 seconds, renders the protected path and dashed counterpart path, and circles the TCA closest-approach target in red before showing a labelled magnified schematic. All judge-facing absolute times, including TCA, are displayed in India Standard Time. SOCRATES values remain authoritative for public screening candidates.
+The central globe opens on the monitored fleet and screened debris; the larger active catalogue is available from the optional Context control. SGP4 propagation follows the selected 1×, 10× or 60× simulation clock for the catalogue, fleet and risk objects. Public-candidate follow compresses a 20-minute encounter window into 6.5 seconds. Selecting the ML alert opens a separate 6.5-second magnified R–T–N replay built from the held-out CDM miss vector and relative velocity. All judge-facing absolute times, including public TCA, are displayed in India Standard Time. SOCRATES values remain authoritative for public screening candidates.
 
 ## Run locally
 

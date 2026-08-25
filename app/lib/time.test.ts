@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatIst } from './time';
+import { advanceSimulationTime, formatIst } from './time';
 
 describe('formatIst', () => {
   it('converts UTC timestamps to India Standard Time', () => {
@@ -10,5 +10,10 @@ describe('formatIst', () => {
 
   it('marks missing values as unavailable', () => {
     expect(formatIst(null)).toBe('Unavailable');
+  });
+
+  it('advances simulation time at 10x and 60x', () => {
+    expect(advanceSimulationTime(1_000, 100, 10)).toBe(2_000);
+    expect(advanceSimulationTime(1_000, 100, 60)).toBe(7_000);
   });
 });
