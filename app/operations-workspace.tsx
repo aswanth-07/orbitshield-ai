@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import {
   Activity, AlertTriangle, Bot, CheckCircle2, ChevronDown, CircleDot, Clock3,
-  Crosshair, Database, Eye, LocateFixed, Pause, Play, Radar, RefreshCw,
+  Crosshair, Database, Eye, LocateFixed, Maximize2, Minimize2, Pause, Play, Radar, RefreshCw,
   RotateCcw, Satellite, ShieldCheck, Sparkles, TriangleAlert,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -37,6 +37,8 @@ const fleetOrbitSnapshot = fleetOrbitFixture as {
   objects: Array<{ catalogId: number; epoch: string; tleLine1: string; tleLine2: string }>;
 };
 const modelBenchmark = benchmarkFixture as ModelBenchmark;
+const benchmarkChampion = modelBenchmark.models.find((model) => model.id === modelBenchmark.championModelId)!;
+const benchmarkMaxTestF2 = Math.max(...modelBenchmark.models.map((model) => model.test.f2));
 const fleetIds = INDIA_EO_FLEET.objects.map((item) => item.catalogId);
 const priorityLabels: Record<ScreeningPriority, string> = {
   review: 'Review', watch: 'Watch', low: 'Low', 'needs-data': 'Needs data',
@@ -93,6 +95,33 @@ function EncounterOverlay({ event, protectedId, threat }: {
   </div>;
 }
 
+function EsaModelEvidence({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return <aside className={`ops-esa-model-evidence ${open ? 'open' : 'collapsed'}`} aria-label="ESA CDM model evidence">
+    <button className="ops-esa-model-head" onClick={onToggle} aria-expanded={open}>
+      <span><Bot size={13} /><i><strong>ESA CDM MODEL</strong><small>Professional intelligence tier</small></i></span>
+      <b>{open ? <Minimize2 size={12} /> : <Maximize2 size={12} />}</b>
+    </button>
+    {open && <>
+      <div className="ops-esa-champion">
+        <span><small>Selected champion</small><strong>{benchmarkChampion.name}</strong></span>
+        <b>{benchmarkChampion.test.f2.toFixed(3)}<small>TEST F2</small></b>
+      </div>
+      <div className="ops-esa-proof-grid">
+        <span><b>{modelBenchmark.dataset.featureCount}</b><small>CDM features</small></span>
+        <span><b>{benchmarkChampion.test.recall.toFixed(3)}</b><small>Test recall</small></span>
+        <span><b>{modelBenchmark.dataset.eventsTest.toLocaleString()}</b><small>Held-out events</small></span>
+      </div>
+      <div className="ops-esa-model-flow"><span>CDM sequence</span><i>→</i><span>76 features</span><i>→</i><span>HGB triage</span></div>
+      <div className="ops-esa-model-bars">
+        {modelBenchmark.models.map((model) => <div key={model.id} className={model.id === modelBenchmark.championModelId ? 'champion' : ''}>
+          <span>{model.name}</span><i><b style={{ width: `${(model.test.f2 / benchmarkMaxTestF2) * 100}%` }} /></i><em>{model.test.f2.toFixed(3)}</em>
+        </div>)}
+      </div>
+      <p>Trained on ESA conjunction messages with covariance and uncertainty fields. It becomes the deeper inference tier when an operator connects compatible CDMs.</p>
+    </>}
+  </aside>;
+}
+
 export default function OperationsWorkspace() {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [conjunctions, setConjunctions] = useState<ConjunctionResponse | null>(null);
@@ -113,6 +142,7 @@ export default function OperationsWorkspace() {
   const [catalogueVisible, setCatalogueVisible] = useState(true);
   const [trajectoryStartTime, setTrajectoryStartTime] = useState<number | null>(null);
   const [selectedMlAlertId, setSelectedMlAlertId] = useState<string | null>(null);
+  const [esaEvidenceOpen, setEsaEvidenceOpen] = useState(true);
   const [pendingGlobeReplayId, setPendingGlobeReplayId] = useState<string | null>(null);
   const simulationRef = useRef(0);
   const lastTick = useRef(0);
@@ -483,6 +513,7 @@ export default function OperationsWorkspace() {
           <small>{selectedEvent ? `${priorityLabels[selectedEvent.priority]} screening candidate · TCA ${formatIst(selectedEvent.tca, { seconds: true })}` : selectedRecord ? `${fleetIds.includes(Number(selectedRecord.NORAD_CAT_ID)) ? 'Monitored' : 'Catalogue'} satellite · NORAD ${selectedRecord.NORAD_CAT_ID}` : 'Select a satellite, screening candidate or ML alert'}</small>
         </div>
         <div className="ops-layer-legend"><span><i className="catalog" /> Catalogue satellites</span><span><i className="sat" /> Monitored satellites</span><span><i className="debris" /> Screened debris</span><span><i className="orbit" /> Monitored orbits</span></div>
+        <EsaModelEvidence open={esaEvidenceOpen} onToggle={() => setEsaEvidenceOpen((value) => !value)} />
         {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected approach to TCA</span><span><i className="counterpart" /> Counterpart approach to TCA</span><span><i className="tca-target" /> Closest approach</span></div>}
         {selectedEvent && selectedProtectedId && replayPhase === 'encounter' && <EncounterOverlay event={selectedEvent} protectedId={selectedProtectedId} threat={selectedThreat} />}
         <div className="ops-globe-controls">

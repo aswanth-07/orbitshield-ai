@@ -15,7 +15,8 @@ turns only elevated results into analyst alerts with an evidence brief.
 
 1. The application opens with automatic source refresh, green public-catalogue
    satellites, six blue monitored satellites and orbits, live ML alerts and a
-   separate public candidate queue.
+   separate public candidate queue. A compact ESA CDM evidence card remains
+   visible over the globe and can collapse when the judge needs more space.
 2. The model rescans complete current events inside 48 hours every minute. A
    named event appears under Live ML Risk Alerts only after its score crosses
    the stored threshold.
@@ -31,6 +32,9 @@ turns only elevated results into analyst alerts with an evidence brief.
 6. Clicking the alert starts a 6.5-second globe replay. A chase camera follows
    the protected satellite before it acquires the counterpart and arrives at
    the pulsing red TCA target.
+7. The ESA evidence card compares the five researched CDM models, identifies
+   the 76-feature Histogram Gradient Boosting champion and states that the tier
+   requires compatible operator CDMs.
 
 ## Customer and value
 

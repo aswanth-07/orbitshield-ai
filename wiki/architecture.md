@@ -28,6 +28,11 @@ orbits and TCA replay in one WebGL scene. The right rail renders either a
 selected object's verified profile, a public candidate review, or the live
 model state.
 
+The globe stage includes a collapsible ESA CDM evidence card. It reads the
+committed five-model benchmark, shows the champion's held-out metrics and plots
+each model's test F2. The card labels this model as the professional tier and
+keeps it separate from the public-feature model that generates current alerts.
+
 The replay clock writes verified SGP4 states to a shared frame reference. A
 WebGL animation loop moves only the selected pair and camera, so the monitoring
 rails do not render on every frame. Monitored background objects, screened
