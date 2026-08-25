@@ -70,6 +70,21 @@ The UI identifies input coverage, validation evidence and calibration limits. A
 public event stays in an `Awaiting CDM` state until a compatible operator
 history is connected.
 
+`POST /api/model/score` is the provider-neutral live inference boundary. It
+accepts one event's ordered CDM messages, rejects evidence inside the T-2
+cutoff, rebuilds the same 76 engineered features used in training, and executes
+the exported 67-tree Histogram Gradient Boosting champion. The TypeScript tree
+evaluator matches the Python model after every message in the reserved event
+sequence. Responses carry the model identity, input coverage, threshold,
+triage score and an explicit non-probability warning.
+
+The main workspace streams the nine visible messages from held-out event 9051
+through this endpoint. The score therefore changes as evidence arrives through
+the same contract intended for a future operator connector. The recorded final
+message remains hidden until the stream completes. Public SOCRATES events stay
+separate and retain `Awaiting CDM` because their fields cannot satisfy this
+contract.
+
 The accelerated TCA replay uses a fixed twenty-minute window and a 6.5-second
 presentation duration. Camera phases follow the protected object, acquire the
 pair, and then frame the encounter. At Earth scale the pair is necessarily
@@ -78,10 +93,11 @@ using the authoritative SOCRATES miss range rather than fabricated geometry.
 
 ## Offline behavior
 
-Bundled catalogue, monitored-fleet TLE, conjunction, threat, and ESA fixtures
-keep the complete judge path available without network access. Generated model
-artifacts stay outside Git. A small, source-labelled inference fixture may be
-committed when it records a real model run against the reserved event.
+Bundled catalogue, monitored-fleet TLE, conjunction, threat, exported model,
+and ESA stream fixtures keep the complete judge path available without network
+access. Python training artifacts stay outside Git. The committed model export
+contains only the selected estimator, preprocessing values, model identity and
+source hash needed for deterministic inference.
 
 ## Stable contracts
 
@@ -92,3 +108,4 @@ committed when it records a real model run against the reserved event.
   view.
 - Model results never overwrite SOCRATES fields or claim operational authority.
 - The T-2 cutoff and reserved-event identity travel with every replay result.
+- Live model input below the T-2 cutoff is rejected before feature generation.

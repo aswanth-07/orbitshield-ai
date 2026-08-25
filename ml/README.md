@@ -38,3 +38,15 @@ The benchmark trains Logistic Regression, Random Forest, Histogram Gradient
 Boosting, LightGBM and a Multi-Layer Perceptron on the same event-held-out T-2
 split. Validation F2 selects thresholds and the benchmark champion. The compact
 research basis is recorded in `ml/literature-survey.md`.
+
+Export the benchmark-selected champion and the complete held-out CDM stream for
+the live application:
+
+```powershell
+.\.venv-ml\Scripts\python.exe .\scripts\export_live_model.py
+```
+
+The export records the trained model hash, preprocessing medians, tree nodes,
+validation threshold and all T-2 fields for event `9051`. The application sends
+each arriving message to `POST /api/model/score`. A parity test compares every
+TypeScript score with the originating Python estimator.

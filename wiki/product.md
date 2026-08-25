@@ -25,9 +25,10 @@ and a controlled escalation workflow.
    protected path and dashed red counterpart path start at their displayed SGP4
    positions and end at the circled TCA geometry. Accelerated follow keeps the
    pair visible while time advances.
-5. Inline model evidence compares five trained families and shows the held-out
-   ESA validation result without presenting it as the score for a public
-   SOCRATES event.
+5. The live CDM card streams nine messages from held-out ESA event 9051 through
+   the production inference contract. The score updates after each arrival,
+   exposes feature coverage, and lets the judge reveal the recorded outcome
+   only after inference completes.
 
 ## Customer and value
 
@@ -37,9 +38,9 @@ team. OrbitShield reduces repetitive interpretation, standardizes escalation,
 and preserves a concise evidence trail for specialist review.
 
 The open tier uses public data for automated monitoring, context and transparent
-screening. A future professional tier connects private CDMs, model inference,
-grounded language-model narration, notifications and audit history after formal
-operational validation.
+screening. The professional path connects private CDMs to the implemented
+inference boundary, then adds grounded narration, notifications and audit
+history after formal operational validation.
 
 ## Why a human reviews the alert
 
@@ -66,6 +67,8 @@ validated model scoring, team notifications and review history.
 
 The hackathon build prioritizes one persistent and explainable workflow. The
 public screening alert triggers without a private data connection. The trained
-model activates only when a CDM sequence provides its required uncertainty and
-covariance fields. Authentication, autonomous manoeuvres, broad fleet
-administration, and operational certification remain outside this release.
+model runs end to end on a source-labelled held-out CDM stream and the same
+endpoint accepts a future compatible operator feed. Public events remain gated
+when uncertainty and covariance fields are absent. Authentication, autonomous
+manoeuvres, broad fleet administration, and operational certification remain
+outside this release.

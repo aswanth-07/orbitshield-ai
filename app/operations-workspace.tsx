@@ -8,9 +8,9 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import replayFixture from './data/esa-validation-replay.json';
 import fleetOrbitFixture from './data/fleet-orbits.snapshot.json';
 import benchmarkFixture from './data/model-benchmark.json';
+import LiveCdmPanel from './live-cdm-panel';
 import {
   animateTcaReplay, isSatelliteObjectType,
   TCA_REPLAY_DURATION_MS, tcaReplayStart, type TcaReplayFrame, type TcaReplayPhase,
@@ -22,7 +22,7 @@ import { comparePriority, formatProbability } from './lib/screening';
 import type { OrbitCameraMode } from './orbit-globe';
 import type {
   CatalogResponse, ConjunctionRecord, ConjunctionResponse, DataStatus, OmmRecord,
-  ModelBenchmark, ScreeningPriority, T2ModelReplay, ThreatObject, ThreatResponse,
+  ModelBenchmark, ScreeningPriority, ThreatObject, ThreatResponse,
 } from './lib/types';
 
 const OrbitGlobe = dynamic(() => import('./orbit-globe'), {
@@ -30,7 +30,6 @@ const OrbitGlobe = dynamic(() => import('./orbit-globe'), {
   loading: () => <div className="globe-loading static">Starting orbital monitor…</div>,
 });
 
-const modelReplay = replayFixture as T2ModelReplay;
 const fleetOrbitSnapshot = fleetOrbitFixture as {
   source: string;
   elementSource: string;
@@ -377,7 +376,7 @@ export default function OperationsWorkspace() {
     return threat && !/^UNKNOWN\b/i.test(threat.name);
   });
   const monitoredEvents = (namedEvents.length >= 6 ? namedEvents : rankedEvents).slice(0, 6);
-  const modelReady = false;
+  const publicEventModelReady = false;
 
   return <main className="ops-shell">
     <header className="ops-header">
@@ -481,10 +480,11 @@ export default function OperationsWorkspace() {
           </section>
 
           <section className="ops-model-state">
-            <div className="ops-section-label"><span>MODEL COVERAGE</span><b className={modelReady ? 'ready' : 'waiting'}>{modelReady ? 'SCORING' : 'AWAITING CDM'}</b></div>
+            <div className="ops-section-label"><span>MODEL COVERAGE</span><b className={publicEventModelReady ? 'ready' : 'waiting'}>{publicEventModelReady ? 'SCORING' : 'AWAITING CDM'}</b></div>
             <div className="ops-model-flow"><span className="done"><CheckCircle2 size={13} /> Live screening</span><i /><span className="done"><CheckCircle2 size={13} /> Alert explanation</span><i /><span><Database size={13} /> CDM triage</span></div>
             <p>The close-approach alert is automatic. Five trained T−2 models activate when an operator CDM history supplies covariance and uncertainty fields.</p>
-            <details><summary>View five-model benchmark <ChevronDown size={13} /></summary><div className="ops-benchmark-list">{modelBenchmark.models.map((model) => <div key={model.id} className={model.id === modelBenchmark.championModelId ? 'champion' : ''}><span><strong>{model.name}</strong><small>{model.family}</small></span><b>{model.validation.f2.toFixed(3)}<small>VAL F2</small></b><b>{model.test.pr_auc.toFixed(3)}<small>TEST PR-AUC</small></b></div>)}</div><div className="ops-model-proof"><span><b>{modelBenchmark.persistenceBaseline.f2.toFixed(3)}</b> persistence F2</span><span><b>{modelReplay.inference.rawScore.toFixed(3)}</b> held-out replay score</span><span><b>{modelBenchmark.dataset.eventsTest.toLocaleString()}</b> test events</span></div><p>{modelBenchmark.championModelName} leads validation F2. These results validate the CDM triage pipeline and are not a score for this public SOCRATES event.</p></details>
+            <details><summary>View five-model benchmark <ChevronDown size={13} /></summary><div className="ops-benchmark-list">{modelBenchmark.models.map((model) => <div key={model.id} className={model.id === modelBenchmark.championModelId ? 'champion' : ''}><span><strong>{model.name}</strong><small>{model.family}</small></span><b>{model.validation.f2.toFixed(3)}<small>VAL F2</small></b><b>{model.test.pr_auc.toFixed(3)}<small>TEST PR-AUC</small></b></div>)}</div><div className="ops-model-proof"><span><b>{modelBenchmark.persistenceBaseline.f2.toFixed(3)}</b> persistence F2</span><span><b>{benchmarkChampion.validation.f2.toFixed(3)}</b> champion validation F2</span><span><b>{modelBenchmark.dataset.eventsTest.toLocaleString()}</b> test events</span></div><p>{modelBenchmark.championModelName} leads validation F2. These results validate the CDM triage pipeline and are not a score for this public SOCRATES event.</p></details>
+            <LiveCdmPanel compact />
           </section>
 
           <section className="ops-action-plan">
@@ -516,7 +516,7 @@ export default function OperationsWorkspace() {
             <div className="ops-section-label"><span>ORBIT RECORD</span><b><ShieldCheck size={11} /> VERIFIED FIELDS</b></div>
             <p>Element epoch: {dateUtc(selectedRecord.EPOCH, true)}. Position and orbit are propagated from this public {selectedRecord.TLE_LINE1 ? 'TLE' : 'OMM'} record using SGP4. Source: {selectedRecord.ORBIT_SOURCE ?? catalog?.source ?? 'public GP catalogue'}.</p>
           </section>
-        </div> : <div className="ops-no-alert ops-monitoring-overview"><Radar size={25} /><strong>Fleet monitoring is active</strong><p>Blue satellites belong to the monitored India fleet. Green satellites provide public catalogue context. Select any satellite for its profile or choose an alert for risk analysis.</p><div><span><b>{fleetIds.length}</b> monitored satellites</span><span><b>{alertCount}</b> watch or review alerts</span><span><b>{threats?.positionedCount ?? 0}</b> risk objects mapped</span></div><section className="ops-benchmark-summary"><span>FIVE-MODEL T−2 LAB</span><strong>{modelBenchmark.championModelName}</strong><small>Champion selected on validation F2 · event {modelBenchmark.dataset.reservedEventId} excluded</small><div><b>{benchmarkChampion.validation.f2.toFixed(3)}<em>VAL F2</em></b><b>{benchmarkChampion.test.f2.toFixed(3)}<em>TEST F2</em></b><b>{(benchmarkChampion.test.recall * 100).toFixed(1)}%<em>RECALL</em></b></div></section></div>}
+        </div> : <div className="ops-no-alert ops-monitoring-overview"><Radar size={25} /><strong>Fleet monitoring is active</strong><p>Blue satellites belong to the monitored India fleet. Green satellites provide public catalogue context. Select any satellite for its profile or choose an alert for risk analysis.</p><div><span><b>{fleetIds.length}</b> monitored satellites</span><span><b>{alertCount}</b> watch or review alerts</span><span><b>{threats?.positionedCount ?? 0}</b> risk objects mapped</span></div><LiveCdmPanel /></div>}
       </aside>
     </section>
   </main>;
