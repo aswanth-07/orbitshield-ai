@@ -130,8 +130,11 @@ function dot(a: Vector, b: Vector) {
 
 export function relativeRtnFromOmm(primary: OmmRecord, secondary: OmmRecord, date: Date) {
   try {
-    const primaryState = propagate(json2satrec(primary as Parameters<typeof json2satrec>[0]), date);
-    const secondaryState = propagate(json2satrec(secondary as Parameters<typeof json2satrec>[0]), date);
+    const preparedPrimary = prepareOmm(primary);
+    const preparedSecondary = prepareOmm(secondary);
+    if (!preparedPrimary || !preparedSecondary) return null;
+    const primaryState = propagate(preparedPrimary.satrec, date);
+    const secondaryState = propagate(preparedSecondary.satrec, date);
     if (!primaryState || !secondaryState ||
         !primaryState.position || typeof primaryState.position === 'boolean' ||
         !primaryState.velocity || typeof primaryState.velocity === 'boolean' ||

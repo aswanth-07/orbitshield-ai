@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { eventForSatellite, highestFleetDebrisAlert, monitoredState } from './monitoring';
+import {
+  eventForSatellite, eventTouchesMonitoringList, highestFleetDebrisAlert,
+  isFutureConjunction, monitoredState, normalizeMonitoringIds,
+} from './monitoring';
 import type { ConjunctionRecord, ThreatObject } from './types';
 
 function event(overrides: Partial<ConjunctionRecord>): ConjunctionRecord {
@@ -72,5 +75,21 @@ describe('automated monitoring selection', () => {
   it('shows a clear state when a monitored satellite has no event', () => {
     expect(monitoredState(null)).toEqual({ label: 'Clear', tone: 'clear' });
     expect(monitoredState(event({ priority: 'needs-data' }))).toEqual({ label: 'Needs data', tone: 'needs-data' });
+    expect(monitoredState(null, false)).toEqual({ label: 'Connector needed', tone: 'needs-data' });
+  });
+
+  it('filters conjunctions against the editable monitoring list', () => {
+    expect(eventTouchesMonitoringList(event({ primaryCatalogId: 10, secondaryCatalogId: 20 }), new Set([20]))).toBe(true);
+    expect(eventTouchesMonitoringList(event({ primaryCatalogId: 10, secondaryCatalogId: 20 }), [30])).toBe(false);
+  });
+
+  it('normalizes persisted catalogue ids without duplicates or invalid values', () => {
+    expect(normalizeMonitoringIds(['44804', 44804, -1, 'bad', 54361], 6)).toEqual([44804, 54361]);
+  });
+
+  it('keeps past conjunctions out of the active queue', () => {
+    const record = event({ tca: '2026-08-25T00:00:00.000Z' });
+    expect(isFutureConjunction(record, new Date('2026-08-24T23:59:59.000Z').getTime())).toBe(true);
+    expect(isFutureConjunction(record, new Date('2026-08-25T00:00:01.000Z').getTime())).toBe(false);
   });
 });

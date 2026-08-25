@@ -87,10 +87,11 @@ export async function POST(request: NextRequest) {
       message?: unknown;
       reset?: unknown;
     };
-    if (typeof body.eventId !== 'number' || !Number.isFinite(body.eventId) || !isMessage(body.message)) {
+    const message = body.message;
+    if (typeof body.eventId !== 'number' || !Number.isFinite(body.eventId) || !isMessage(message)) {
       return NextResponse.json({ error: 'A numeric eventId and one valid CDM message are required.' }, { status: 400 });
     }
-    if (body.message.time_to_tca < model.cutoffDays) {
+    if (message.time_to_tca < model.cutoffDays) {
       return NextResponse.json({ error: `This model accepts evidence at or before the T-${model.cutoffDays} day decision cutoff.` }, { status: 422 });
     }
 
@@ -99,8 +100,8 @@ export async function POST(request: NextRequest) {
     const mode: FeedMode = body.mode === 'held-out-test-feed' ? 'held-out-test-feed' : 'external-operator';
     const messages = reset ? [] : existing.messages;
     const updatedMessages = mode === 'held-out-test-feed'
-      ? [...messages.filter((message) => message.time_to_tca !== body.message.time_to_tca), body.message]
-      : [...messages, body.message];
+      ? [...messages.filter((existingMessage) => existingMessage.time_to_tca !== message.time_to_tca), message]
+      : [...messages, message];
     if (updatedMessages.length > 64) return NextResponse.json({ error: 'The live event already contains 64 messages.' }, { status: 409 });
     const parsedTca = typeof body.tca === 'string' && Number.isFinite(new Date(body.tca).getTime())
       ? new Date(body.tca).toISOString()

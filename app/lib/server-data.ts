@@ -202,7 +202,9 @@ export async function getCatalog(ids?: number[]): Promise<CatalogResponse> {
   }
 }
 
-function finite(value: unknown): number | null {
+export function parseOptionalNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && !value.trim()) return null;
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -219,15 +221,15 @@ function normalizeSocratesRows(rows: Record<string, string>[], now = new Date())
     return [enrichConjunction({
       primaryCatalogId,
       primaryName: row.OBJECT_NAME_1?.trim() || `NORAD ${primaryCatalogId}`,
-      primaryElementAgeDays: finite(row.DSE_1),
+      primaryElementAgeDays: parseOptionalNumber(row.DSE_1),
       secondaryCatalogId,
       secondaryName: row.OBJECT_NAME_2?.trim() || `NORAD ${secondaryCatalogId}`,
-      secondaryElementAgeDays: finite(row.DSE_2),
+      secondaryElementAgeDays: parseOptionalNumber(row.DSE_2),
       tca,
-      rangeKm: finite(row.TCA_RANGE),
-      relativeSpeedKmS: finite(row.TCA_RELATIVE_SPEED),
-      maximumProbability: finite(row.MAX_PROB),
-      dilutionKm: finite(row.DILUTION),
+      rangeKm: parseOptionalNumber(row.TCA_RANGE),
+      relativeSpeedKmS: parseOptionalNumber(row.TCA_RELATIVE_SPEED),
+      maximumProbability: parseOptionalNumber(row.MAX_PROB),
+      dilutionKm: parseOptionalNumber(row.DILUTION),
     }, now)];
   });
 }
@@ -309,41 +311,12 @@ export function debrisSizeFromRcs(rcs: number | null): DebrisSize {
   return 'large';
 }
 
-async function fetchLiveThreatRecords(ids: number[], fallback: Map<number, OmmRecord | null>) {
-  const records = new Map(fallback);
-  let cursor = 0;
-  let liveCount = 0;
-  let halted = false;
-  let latestEpoch: string | null = null;
-
-  async function worker() {
-    while (!halted && cursor < ids.length) {
-      const catalogId = ids[cursor++];
-      try {
-        const response = await fetch(`${CATNR_URL}${catalogId}`, fetchOptions());
-        if (response.status === 403) {
-          halted = true;
-          return;
-        }
-        if (!response.ok) continue;
-        const [record] = normalizeOmm(await response.json());
-        if (!record) continue;
-        records.set(catalogId, record);
-        liveCount += 1;
-        if (!latestEpoch || new Date(record.EPOCH) > new Date(latestEpoch)) latestEpoch = record.EPOCH;
-      } catch {
-        // Keep the timestamped per-object fallback when a live element is unavailable.
-      }
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(8, ids.length) }, worker));
-  return { records, liveCount, latestEpoch, halted };
-}
-
 function aggregateThreats(conjunctions: ConjunctionResponse) {
   const aggregates = new Map<number, ThreatAggregate>();
+  const now = Date.now();
   for (const event of conjunctions.events) {
+    const tca = new Date(event.tca).getTime();
+    if (!Number.isFinite(tca) || tca <= now) continue;
     const primaryProtected = INDIA_EO_IDS.has(event.primaryCatalogId);
     const secondaryProtected = INDIA_EO_IDS.has(event.secondaryCatalogId);
     if (primaryProtected === secondaryProtected) continue;
@@ -380,7 +353,7 @@ function buildThreatObjects(
   return [...aggregates].map(([catalogId, aggregate]): ThreatObject => {
     const snapshotObject = snapshotById.get(catalogId);
     const satcat = snapshotObject?.satcat ?? null;
-    const rcs = finite(satcat?.RCS);
+    const rcs = parseOptionalNumber(satcat?.RCS);
     return {
       catalogId,
       name: (satcat?.OBJECT_NAME || aggregate.name).replace(/\s*\[[+?−-]\]\s*$/, '').trim(),
@@ -422,10 +395,15 @@ export function getBundledScreening() {
 export async function getThreats(): Promise<ThreatResponse> {
   const now = Date.now();
   if (threatCache && threatCache.expiresAt > now) return threatCache.value;
-  const edgeValue = await readEdgeCache<ThreatResponse>('threat-overlay-current');
+  const edgeValue = await readEdgeCache<ThreatResponse>('threat-overlay-snapshot-v2');
   if (edgeValue) {
-    threatCache = { value: edgeValue, expiresAt: now + TWO_HOURS };
-    return edgeValue;
+    const cachedValue: ThreatResponse = {
+      ...edgeValue,
+      status: 'cached',
+      message: 'Cached threat geometry is shown while the selected conjunction pair remains available for an on-demand element refresh.',
+    };
+    threatCache = { value: cachedValue, expiresAt: now + TWO_HOURS };
+    return cachedValue;
   }
 
   const conjunctions = await getConjunctions();
@@ -435,25 +413,19 @@ export async function getThreats(): Promise<ThreatResponse> {
 
   const threatIds = [...aggregates.keys()];
   const fallbackRecords = new Map(threatIds.map((catalogId) => [catalogId, snapshotById.get(catalogId)?.record ?? null]));
-  const live = await fetchLiveThreatRecords(threatIds, fallbackRecords);
-
-  const objects = buildThreatObjects(aggregates, snapshotById, live.records);
+  const objects = buildThreatObjects(aggregates, snapshotById, fallbackRecords);
 
   const value: ThreatResponse = {
-    status: conjunctions.status === 'current' && live.liveCount >= Math.ceil(threatIds.length * 0.8) ? 'current' : 'cached',
-    source: `${conjunctions.source} + CelesTrak live GP OMM + SATCAT metadata`,
-    sourceUpdatedAt: live.latestEpoch ?? conjunctions.sourceUpdatedAt ?? snapshot.sourceUpdatedAt,
+    status: 'cached',
+    source: `${conjunctions.source} + timestamped CelesTrak GP/SATCAT threat snapshot`,
+    sourceUpdatedAt: conjunctions.sourceUpdatedAt ?? snapshot.sourceUpdatedAt,
     fetchedAt: nowIso(),
     count: objects.length,
     positionedCount: objects.filter((item) => item.record).length,
     objects,
-    message: live.halted
-      ? 'CelesTrak throttled the refresh; current screening metrics remain visible and timestamped orbit fallbacks fill the incomplete live set.'
-      : live.liveCount < threatIds.length
-        ? `${live.liveCount} of ${threatIds.length} risk-object element sets refreshed live; timestamped fallbacks fill the remaining public-data gaps.`
-        : `All ${live.liveCount} risk-object element sets refreshed from CelesTrak.`,
+    message: 'The overview uses bundled, timestamped threat geometry. OrbitShield fetches only the selected pair on demand to respect CelesTrak usage limits.',
   };
   threatCache = { value, expiresAt: now + TWO_HOURS };
-  await writeEdgeCache('threat-overlay-current', value, TWO_HOURS);
+  await writeEdgeCache('threat-overlay-snapshot-v2', value, TWO_HOURS);
   return value;
 }

@@ -3,7 +3,7 @@ import { comparePriority } from './screening';
 import type { ConjunctionRecord, ThreatObject } from './types';
 
 export type MonitoredState = {
-  label: 'Review' | 'Watch' | 'Low' | 'Needs data' | 'Clear';
+  label: 'Review' | 'Watch' | 'Low' | 'Needs data' | 'Clear' | 'Connector needed';
   tone: 'review' | 'watch' | 'low' | 'needs-data' | 'clear';
 };
 
@@ -13,7 +13,30 @@ export function eventForSatellite(events: ConjunctionRecord[], catalogId: number
     .sort(comparePriority)[0] ?? null;
 }
 
-export function monitoredState(event: ConjunctionRecord | null): MonitoredState {
+export function eventTouchesMonitoringList(event: ConjunctionRecord, monitoredIds: Iterable<number>) {
+  const ids = monitoredIds instanceof Set ? monitoredIds : new Set(monitoredIds);
+  return ids.has(event.primaryCatalogId) || ids.has(event.secondaryCatalogId);
+}
+
+export function isFutureConjunction(event: ConjunctionRecord, now: number) {
+  const tca = new Date(event.tca).getTime();
+  return Number.isFinite(tca) && tca > now;
+}
+
+export function normalizeMonitoringIds(values: unknown, limit = 12) {
+  if (!Array.isArray(values)) return [];
+  const ids: number[] = [];
+  for (const value of values) {
+    const catalogId = Number(value);
+    if (!Number.isInteger(catalogId) || catalogId <= 0 || ids.includes(catalogId)) continue;
+    ids.push(catalogId);
+    if (ids.length >= limit) break;
+  }
+  return ids;
+}
+
+export function monitoredState(event: ConjunctionRecord | null, hasScreeningCoverage = true): MonitoredState {
+  if (!hasScreeningCoverage) return { label: 'Connector needed', tone: 'needs-data' };
   if (!event) return { label: 'Clear', tone: 'clear' };
   if (event.priority === 'review') return { label: 'Review', tone: 'review' };
   if (event.priority === 'watch') return { label: 'Watch', tone: 'watch' };

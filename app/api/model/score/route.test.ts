@@ -4,6 +4,12 @@ import { describe, expect, it } from 'vitest';
 import streamFixture from '../../../data/live-cdm-stream.json';
 import { POST } from './route';
 
+type ScoreResponseBody = {
+  status: string;
+  model: { id: string };
+  inference: { score: number; triage: string };
+};
+
 function request(messages: unknown[]) {
   return new NextRequest('http://localhost/api/model/score', {
     method: 'POST',
@@ -15,7 +21,7 @@ function request(messages: unknown[]) {
 describe('POST /api/model/score', () => {
   it('scores the complete held-out T-2 stream with the exported champion', async () => {
     const response = await POST(request(streamFixture.messages));
-    const body = await response.json();
+    const body = await response.json() as ScoreResponseBody;
     expect(response.status).toBe(200);
     expect(body.status).toBe('scored');
     expect(body.model.id).toBe('orbitshield-hgb-t2-v1');

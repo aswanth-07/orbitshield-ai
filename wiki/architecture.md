@@ -28,10 +28,9 @@ orbits and TCA replay in one WebGL scene. The right rail renders either a
 selected object's verified profile, a public candidate review, or the live
 model state.
 
-The globe stage includes one compact card for the deployed public-feature
-model. It shows the model name, tree count, live-input count and score threshold.
-The full ESA five-model comparison remains committed as research evidence but
-does not appear in the default judge workspace.
+The right rail shows one compact Current Model section only after event
+selection. The full ESA five-model comparison remains committed as research
+evidence but does not appear in the default judge workspace.
 
 The replay clock writes verified SGP4 states to a shared frame reference. A
 WebGL animation loop moves only the selected pair and camera, so the monitoring
@@ -39,7 +38,7 @@ rails do not render on every frame. Monitored background objects, screened
 debris and the optional full catalogue use separate slower time buckets.
 Every monitored label includes a blue anchor dot at its propagated position so
 the satellite remains distinguishable from its orbit path at globe scale.
-The live simulation clock advances every 100 milliseconds and supplies the
+The live simulation clock advances every 500 milliseconds and supplies the
 catalogue, monitored fleet and risk-object layers. Accelerated time appears
 only inside the bounded TCA replay.
 Prepared SGP4 records and cached Three.js marker geometry avoid repeated parsing
@@ -54,6 +53,31 @@ window so repeated Earth-fixed ground tracks do not obscure the encounter. The
 protected path is solid red and the counterpart path is dashed red. Their first
 and last samples equal the displayed start time and TCA time.
 
+The globe samples stable background orbit paths on a five-minute time bucket.
+The TCA replay moves only the selected markers and camera on each animation
+frame. This keeps SGP4 path generation out of the high-frequency render loop.
+The protected marker grows and turns red during event review, while the replay
+camera keeps it near the centre before acquiring the counterpart.
+
+`app/lib/maneuver.ts` builds advisory manoeuvre candidates. It applies a small
+impulsive delta-v in the local R-T-N frame and propagates relative displacement
+with the linearized Hill-Clohessy-Wiltshire equations. The engine tests 48, 36,
+and 24 hour epochs when the event has enough lead time. It ranks only candidates
+that meet the configured added-separation goal at the original source TCA, then
+chooses the lowest delta-v. The rocket equation estimates propellant and thrust
+time from an explicitly editable example spacecraft profile.
+
+The green candidate path is a linearized HCW offset over the nominal SGP4 path.
+It is a visual preview, not a new ephemeris. The UI keeps post-manoeuvre
+probability null because public elements do not include the covariance and
+hard-body radius needed for that calculation. A professional connector must
+provide an operator CDM and run a full-catalogue re-screen before flight review.
+
+Wide screens use the three-part workspace. Between 701 and 980 pixels, the
+analysis rail moves below the fleet and globe instead of covering the WebGL
+scene. Narrow screens order the globe first, the selected analysis second, and
+the monitoring rail last.
+
 ## Public screening lane
 
 CelesTrak OMM records provide orbital elements for SGP4 context. A small
@@ -65,6 +89,22 @@ conjunction metrics. Transparent rules
 assign Review, Watch, Low, or Needs data. Public geometry remains approximate,
 and the SOCRATES values remain authoritative for the event card.
 
+The overview uses a bundled timestamped threat fixture instead of issuing one
+CelesTrak request per counterpart. Selecting an event requests only that pair's
+current public records. Removing the per-counterpart live fetch invalidated the
+`threat-overlay-current` edge-cache entries, whose stored source string still
+named a live GP OMM refresh. The threat overlay now reads and writes
+`threat-overlay-snapshot-v2`, so a cached response can only describe a source
+the current code actually uses. Blank SOCRATES numeric cells stay null and produce
+Needs data instead of becoming zero. Active queues and threat aggregates omit
+events whose TCA has passed.
+
+The six default satellites have known screening coverage in the bundled and
+current fleet feed. A judge can add any active payload to device-local storage
+for orbit monitoring. A custom payload shows Connector needed until a screening
+or CDM provider supplies conjunction coverage, so zero returned events never
+appear as a false Clear state.
+
 The deployed public-feature model accepts events inside 48 hours. It maps TCA,
 maximum probability, minimum range and relative speed to the same four numeric
 features used during training. A 37-tree Histogram Gradient Boosting classifier
@@ -72,9 +112,11 @@ raises an alert when its score crosses 0.67. It reaches 0.631 test F2, 0.933
 test recall and 0.529 test PR-AUC on an event-held-out split. The score ranks
 analyst review and does not replace the source probability.
 
-Elevated events are ranked first by the source maximum collision probability,
-then by model score and time to TCA. The left rail exposes only the primary
-alert and reports how many elevated events remain queued. Repeated raw scores
+Elevated events inside the 24 to 48 hour planning window rank ahead of late or
+more distant events. A named debris counterpart breaks the next tie, followed
+by source maximum probability, model score, and time to TCA. The left rail
+exposes only the primary alert and reports how many elevated events remain
+queued. Repeated raw scores
 are possible when events land in the same gradient-boosting leaves, so the
 alert card displays the source probability while the selected-event view shows
 the raw model score and threshold once.
@@ -142,6 +184,10 @@ source hash needed for deterministic inference.
 - Only a complete event inside 48 hours can populate the live ML alert queue.
 - Judge-facing absolute timestamps use India Standard Time.
 - Model results never overwrite SOCRATES fields or claim operational authority.
+- Manoeuvre candidates expose separation at the original TCA, delta-v,
+  propellant, and assumptions. They never expose an unvalidated post-burn Pc.
+- Custom monitored payloads require an explicit coverage connector before the
+  interface can label their screening state Clear.
 - The T-2 cutoff and reserved-event identity travel with every replay result.
 - Live model input below the T-2 cutoff is rejected before feature generation.
 - External and held-out test feeds remain visibly distinguishable.

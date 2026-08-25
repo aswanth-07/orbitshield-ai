@@ -4,6 +4,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import streamFixture from '../../../data/live-cdm-stream.json';
 import { DELETE, GET, POST } from './route';
 
+type LiveResponseBody = {
+  status: string;
+  feed: null | { messagesReceived: number; mode: string; tca: string | null };
+  inference?: { score: number; messagesSeen: number };
+};
+
 function request(message: unknown, reset = false, tca?: string) {
   return new NextRequest('http://localhost/api/model/live', {
     method: 'POST',
@@ -25,18 +31,18 @@ describe('/api/model/live', () => {
   });
 
   it('listens, ingests messages one at a time and exposes the latest score', async () => {
-    const waiting = await (await GET()).json();
+    const waiting = await (await GET()).json() as LiveResponseBody;
     expect(waiting.status).toBe('listening');
 
     await POST(request(streamFixture.messages[0], true));
     const second = await POST(request(streamFixture.messages[1]));
-    const body = await second.json();
-    expect(body.feed.messagesReceived).toBe(2);
-    expect(body.feed.mode).toBe('held-out-test-feed');
-    expect(body.inference.score).toBeCloseTo(0.988603072796187, 12);
+    const body = await second.json() as LiveResponseBody;
+    expect(body.feed?.messagesReceived).toBe(2);
+    expect(body.feed?.mode).toBe('held-out-test-feed');
+    expect(body.inference?.score).toBeCloseTo(0.988603072796187, 12);
 
-    const current = await (await GET()).json();
-    expect(current.inference.messagesSeen).toBe(2);
+    const current = await (await GET()).json() as LiveResponseBody;
+    expect(current.inference?.messagesSeen).toBe(2);
   });
 
   it('rejects a message from inside the T-2 cutoff', async () => {
@@ -46,15 +52,15 @@ describe('/api/model/live', () => {
 
   it('normalizes an absolute TCA for a connected feed', async () => {
     const response = await POST(request(streamFixture.messages[0], true, '2026-08-27T09:05:00Z'));
-    const body = await response.json();
-    expect(body.feed.tca).toBe('2026-08-27T09:05:00.000Z');
+    const body = await response.json() as LiveResponseBody;
+    expect(body.feed?.tca).toBe('2026-08-27T09:05:00.000Z');
   });
 
   it('deduplicates repeated held-out feed messages after a reload', async () => {
     await POST(request(streamFixture.messages[0], true));
     const repeated = await POST(request(streamFixture.messages[0]));
-    const body = await repeated.json();
-    expect(body.feed.messagesReceived).toBe(1);
-    expect(body.inference.messagesSeen).toBe(1);
+    const body = await repeated.json() as LiveResponseBody;
+    expect(body.feed?.messagesReceived).toBe(1);
+    expect(body.inference?.messagesSeen).toBe(1);
   });
 });

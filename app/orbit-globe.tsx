@@ -13,6 +13,7 @@ import {
   type TcaReplayFrame,
   type TcaReplayPhase,
 } from './lib/collision-visualization';
+import { sampleManeuverPath, type ManeuverCandidate } from './lib/maneuver';
 import { prepareOmm, propagateOmm, propagatePreparedOmm, sampleOrbitPath, sampleOrbitSegment } from './lib/orbit';
 import type { ConjunctionRecord, OmmRecord, OrbitPath, PropagatedObject, ThreatObject } from './lib/types';
 import PropagationWorker from './workers/propagation.worker.ts?worker';
@@ -39,7 +40,8 @@ type OrbitGlobeProps = {
   showFleetLabels?: boolean;
   replayPhase: TcaReplayPhase | null;
   replayActive: boolean;
-  replayFrameRef: RefObject<TcaReplayFrame | null>;
+  replayFrameRef?: RefObject<TcaReplayFrame | null>;
+  maneuverCandidate?: ManeuverCandidate | null;
   onObjectSelect: (catalogId: number) => void;
 };
 
@@ -165,6 +167,7 @@ export default function OrbitGlobe({
   replayPhase,
   replayActive,
   replayFrameRef,
+  maneuverCandidate = null,
   onObjectSelect,
 }: OrbitGlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -180,6 +183,8 @@ export default function OrbitGlobe({
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null);
   const followedTargetRef = useRef<THREE.Vector3 | null>(null);
   const positionedCameraKeyRef = useRef('');
+  const fallbackReplayFrameRef = useRef<TcaReplayFrame | null>(null);
+  const activeReplayFrameRef = replayFrameRef ?? fallbackReplayFrameRef;
   const [size, setSize] = useState({ width: 900, height: 700 });
   const [cataloguePoints, setCataloguePoints] = useState<PropagatedObject[]>([]);
   const [globeReady, setGlobeReady] = useState(false);
@@ -440,8 +445,10 @@ export default function OrbitGlobe({
       if (!point) return [];
       return [{
         ...point,
-        color: monitored ? MONITORED_SATELLITE_COLOR : CATALOG_SATELLITE_COLOR,
-        radius: selected ? 0.36 : previewId === point.catalogId ? 0.3 : 0.21,
+        color: selectedEvent && catalogId === selectedSatelliteId
+          ? RISK_ORBIT_COLOR
+          : monitored ? MONITORED_SATELLITE_COLOR : CATALOG_SATELLITE_COLOR,
+        radius: selected ? 0.46 : previewId === point.catalogId ? 0.3 : 0.21,
         role: selectedIds.includes(point.catalogId) ? 'selected conjunction satellite' : fleetIds.includes(point.catalogId) ? 'active watchlist satellite' : 'satellite search preview',
         selected,
         selectable: true,
@@ -579,6 +586,7 @@ export default function OrbitGlobe({
       const protectedObject = point.catalogId === reviewPair.protectedCatalogId;
       return {
         ...point,
+        catalogId: protectedObject ? -2 : -3,
         color: protectedObject ? MONITORED_SATELLITE_COLOR : RISK_ORBIT_COLOR,
         radius: 0.17,
         role: `${protectedObject ? 'selected satellite' : 'paired object'} position at TCA · public-element approximation`,
@@ -649,11 +657,13 @@ export default function OrbitGlobe({
     };
 
     const moveMarker = (catalogId: number, position: THREE.Vector3) => {
-      markerMap.get(catalogId)?.position.copy(position);
+      const marker = markerMap.get(catalogId);
+      const globePositionWrapper = marker?.parent;
+      if (globePositionWrapper) globePositionWrapper.position.copy(position);
     };
 
     const tick = () => {
-      const replayFrame = replayFrameRef.current;
+      const replayFrame = activeReplayFrameRef.current;
       if (replayFrame) {
         const targetMarker = markerMap.get(-1);
         const targetPulse = 1 + Math.sin(performance.now() / 150) * 0.14;
@@ -677,12 +687,12 @@ export default function OrbitGlobe({
             const outward = protectedPosition.clone().normalize();
             const side = new THREE.Vector3().crossVectors(outward, forward).normalize();
             const chaseCamera = protectedPosition.clone()
-              .add(outward.multiplyScalar(40))
-              .add(forward.multiplyScalar(-28))
-              .add(side.multiplyScalar(8));
-            const lookAhead = protectedPosition.clone().add(forward.multiplyScalar(7));
-            globe.camera().position.lerp(chaseCamera, 0.32);
-            controls.target.lerp(lookAhead, 0.46);
+              .add(outward.multiplyScalar(52))
+              .add(forward.multiplyScalar(-18))
+              .add(side.multiplyScalar(6));
+            const lookAhead = protectedPosition.clone().add(forward.multiplyScalar(2.5));
+            globe.camera().position.lerp(chaseCamera, 0.24);
+            controls.target.lerp(lookAhead, 0.34);
           } else {
             const center = protectedPosition.clone().add(counterpartPosition).multiplyScalar(0.5);
             if (replayFrame.phase === 'acquire') {
@@ -706,11 +716,11 @@ export default function OrbitGlobe({
         if (child.name === 'closest-approach-target') child.scale.set(11, 11, 1);
       });
     };
-  }, [globeReady, preparedFocusRecords, preparedThreats, replayActive, replayFrameRef, reviewPair, selectedEvent]);
+  }, [activeReplayFrameRef, globeReady, preparedFocusRecords, preparedThreats, replayActive, reviewPair, selectedEvent]);
 
-  const orbitPathMinute = Math.floor(simulationTime / 300_000) * 5;
+  const orbitPathBucket = Math.floor(simulationTime / 300_000) * 300_000;
   const paths = useMemo<OrbitPath[]>(() => {
-    const sampledAt = new Date(orbitPathMinute * 60_000);
+    const sampledAt = new Date(orbitPathBucket);
     const recordById = new Map(focusRecords.map((record) => [Number(record.NORAD_CAT_ID), record]));
     const pairIds = new Set(selectedIds);
     const background = fleetIds.flatMap((catalogId) => {
@@ -743,7 +753,7 @@ export default function OrbitGlobe({
     const selectedStyle = orbitVisualStyle('protected-risk');
     const pairedStyle = orbitVisualStyle('paired-object', RISK_ORBIT_COLOR);
     const tcaTime = new Date(selectedEvent.tca).getTime();
-    const startTime = Math.min(trajectoryStartTime ?? simulationTime, tcaTime);
+    const startTime = Math.min(trajectoryStartTime ?? orbitPathBucket, tcaTime);
     const durationMinutes = Math.max(1, (tcaTime - startTime) / 60_000);
     const segmentSamples = Math.min(280, Math.max(72, Math.ceil(durationMinutes / 4)));
     const selectedPath = protectedRecord
@@ -760,6 +770,17 @@ export default function OrbitGlobe({
           ...pairedStyle,
         }]
       : [];
+    const maneuverStyle = orbitVisualStyle('maneuver-study');
+    const maneuverPath = maneuverCandidate && protectedRecord
+      ? sampleManeuverPath(
+          protectedRecord,
+          maneuverCandidate,
+          new Date(startTime),
+          new Date(tcaTime),
+          maneuverStyle.color,
+          segmentSamples,
+        )
+      : null;
     const cpaStyle = orbitVisualStyle('cpa-link');
     const cpaPath = showEncounterGeometry && tcaPoints.length === 2 ? [{
       catalogId: -1,
@@ -782,8 +803,15 @@ export default function OrbitGlobe({
         ],
       };
     }) : [];
-    return [...background, ...selectedPath, ...pairedPath, ...depthPaths, ...cpaPath];
-  }, [fleetIds, focusRecords, orbitPathMinute, reviewPair, selectedEvent, selectedIds, selectedSatelliteId, showEncounterGeometry, simulationTime, tcaPoints, trajectoryStartTime]);
+    return [
+      ...background,
+      ...selectedPath,
+      ...pairedPath,
+      ...(maneuverPath ? [{ ...maneuverPath, ...maneuverStyle }] : []),
+      ...depthPaths,
+      ...cpaPath,
+    ];
+  }, [fleetIds, focusRecords, maneuverCandidate, orbitPathBucket, reviewPair, selectedEvent, selectedIds, selectedSatelliteId, showEncounterGeometry, tcaPoints, trajectoryStartTime]);
 
   useEffect(() => {
     if (!globeReady || !globeRef.current) return;

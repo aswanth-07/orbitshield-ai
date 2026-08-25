@@ -12,7 +12,7 @@ export const DEBRIS_COLORS: Record<DebrisSize, string> = {
   unknown: '#9aa7b0',
 };
 
-export type OrbitVisualRole = 'watchlist' | 'selected-satellite' | 'protected-risk' | 'paired-object' | 'cpa-link' | 'depth-guide';
+export type OrbitVisualRole = 'watchlist' | 'selected-satellite' | 'protected-risk' | 'paired-object' | 'maneuver-study' | 'cpa-link' | 'depth-guide';
 
 export type OrbitVisualStyle = {
   color: string;
@@ -48,6 +48,9 @@ export function orbitVisualStyle(role: OrbitVisualRole, pairedColor = DEBRIS_COL
   }
   if (role === 'paired-object') {
     return { color: RISK_ORBIT_COLOR, stroke: 1.15, dashLength: 0.055, dashGap: 0.025, dashAnimateTime: 1800 };
+  }
+  if (role === 'maneuver-study') {
+    return { color: '#50d9b3', stroke: 1.25, dashLength: 0.12, dashGap: 0.035, dashAnimateTime: 1_400 };
   }
   if (role === 'cpa-link') {
     return { color: '#ff7983', stroke: 0.7, dashLength: 0.025, dashGap: 0.015, dashAnimateTime: 900 };

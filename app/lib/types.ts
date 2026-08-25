@@ -310,7 +310,7 @@ export type OrbitPath = {
   catalogId: number;
   name: string;
   color: string;
-  role?: 'watchlist' | 'selected-satellite' | 'protected-risk' | 'paired-object' | 'cpa-link' | 'depth-guide';
+  role?: 'watchlist' | 'selected-satellite' | 'protected-risk' | 'paired-object' | 'maneuver-study' | 'cpa-link' | 'depth-guide';
   stroke?: number;
   dashLength?: number;
   dashGap?: number;

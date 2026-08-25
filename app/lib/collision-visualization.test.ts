@@ -84,6 +84,7 @@ describe('collision visualization rules', () => {
     const selected = orbitVisualStyle('selected-satellite');
     const protectedRisk = orbitVisualStyle('protected-risk');
     const paired = orbitVisualStyle('paired-object', DEBRIS_COLORS.medium);
+    const maneuver = orbitVisualStyle('maneuver-study');
     const depthGuide = orbitVisualStyle('depth-guide', DEBRIS_COLORS.medium);
     expect(watchlist.color).toContain('53,215,255');
     expect(watchlist.stroke).toBeGreaterThan(0.5);
@@ -95,6 +96,8 @@ describe('collision visualization rules', () => {
     expect(protectedRisk.dashGap).toBe(0);
     expect(paired.color).toBe(RISK_ORBIT_COLOR);
     expect(paired.dashGap).toBeGreaterThan(0);
+    expect(maneuver.color).toBe('#50d9b3');
+    expect(maneuver.dashGap).toBeGreaterThan(0);
     expect(depthGuide.color).toBe(DEBRIS_COLORS.medium);
     expect(depthGuide.dashGap).toBeGreaterThan(0);
   });
