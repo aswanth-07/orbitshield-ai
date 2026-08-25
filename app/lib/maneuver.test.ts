@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import fleetOrbitFixture from '../data/fleet-orbits.snapshot.json';
-import { buildManeuverStudy, hcwImpulseDisplacement, propellantForImpulse, sampleManeuverPath } from './maneuver';
+import { buildManeuverStudy, hcwImpulseDisplacement, leadTimeCostCurve, propellantForImpulse, sampleManeuverPath } from './maneuver';
 import type { ConjunctionRecord, OmmRecord } from './types';
 
 const orbitFixture = fleetOrbitFixture as {
@@ -95,6 +95,49 @@ describe('manoeuvre scenario physics', () => {
     expect(study.method).toContain('original source TCA');
     expect(study.requiredChecks.length).toBeGreaterThan(0);
     expect(study.requiredChecks.join(' ')).toContain('full catalogue');
+  });
+
+  it('prices the same separation goal higher as the decision is delayed', () => {
+    const curve = leadTimeCostCurve({
+      event: event(),
+      protectedRecord: protectedRecord(),
+      counterpartRecord: counterpartRecord(),
+      now: new Date('2026-08-25T04:00:00Z').getTime(),
+    });
+    expect(curve.length).toBeGreaterThan(2);
+    expect(curve.map((point) => point.leadHours)).toEqual([...curve.map((point) => point.leadHours)].sort((a, b) => b - a));
+    for (let index = 1; index < curve.length; index += 1) {
+      expect(curve[index].deltaVMps).toBeGreaterThan(curve[index - 1].deltaVMps);
+      expect(curve[index].propellantGrams).toBeGreaterThan(curve[index - 1].propellantGrams);
+    }
+  });
+
+  it('scales the required impulse with the inverse of lead time', () => {
+    const curve = leadTimeCostCurve({
+      event: event(),
+      protectedRecord: protectedRecord(),
+      counterpartRecord: counterpartRecord(),
+      now: new Date('2026-08-25T04:00:00Z').getTime(),
+    });
+    const long = curve.find((point) => point.leadHours === 24);
+    const half = curve.find((point) => point.leadHours === 12);
+    expect(long).toBeDefined();
+    expect(half).toBeDefined();
+    expect(half!.deltaVMps / long!.deltaVMps).toBeGreaterThan(1.7);
+    expect(half!.deltaVMps / long!.deltaVMps).toBeLessThan(2.3);
+  });
+
+  it('never asks for more impulse than the sampled sweep already found', () => {
+    const now = new Date('2026-08-25T04:00:00Z').getTime();
+    const study = buildManeuverStudy({
+      event: event(), protectedRecord: protectedRecord(), counterpartRecord: counterpartRecord(), now,
+    });
+    const curve = leadTimeCostCurve({
+      event: event(), protectedRecord: protectedRecord(), counterpartRecord: counterpartRecord(), now,
+    });
+    const matching = curve.find((point) => point.leadHours === study.recommended!.leadHours);
+    expect(matching).toBeDefined();
+    expect(matching!.deltaVMps).toBeLessThanOrEqual(study.recommended!.deltaVMps + 1e-9);
   });
 
   it('does not create a late burn candidate inside six hours', () => {

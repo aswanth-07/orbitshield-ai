@@ -296,6 +296,87 @@ export function buildManeuverStudy({
   };
 }
 
+const COST_CURVE_LEAD_HOURS = [48, 36, 24, 18, 12, 6, 3];
+const COST_CURVE_MAX_DELTA_V_MPS = 5;
+
+export type LeadTimeCost = {
+  leadHours: number;
+  deltaVMps: number;
+  propellantGrams: number;
+  direction: ManeuverDirection;
+  withinTestedRange: boolean;
+};
+
+/**
+ * Minimum impulse that reaches the separation goal at each decision time.
+ *
+ * Separation at the source TCA is quadratic in the impulse magnitude along a
+ * fixed direction, so the required delta-v has a closed form and does not need
+ * the sampled sweep that `buildManeuverStudy` uses to rank candidates.
+ */
+export function leadTimeCostCurve({
+  event,
+  protectedRecord,
+  counterpartRecord,
+  now,
+  assumptions = DEFAULT_MANEUVER_ASSUMPTIONS,
+}: {
+  event: ConjunctionRecord;
+  protectedRecord: OmmRecord | null | undefined;
+  counterpartRecord: OmmRecord | null | undefined;
+  now: number;
+  assumptions?: ManeuverAssumptions;
+}): LeadTimeCost[] {
+  if (!protectedRecord || !counterpartRecord || event.rangeKm === null || !finitePositive(event.rangeKm)) return [];
+  const meanMotionRevolutionsPerDay = Number(protectedRecord.MEAN_MOTION);
+  if (!finitePositive(meanMotionRevolutionsPerDay)) return [];
+  const encounterDirection = normalizedRtnDirection(event, protectedRecord, counterpartRecord);
+  if (!encounterDirection) return [];
+
+  const hoursToTca = (new Date(event.tca).getTime() - now) / 3_600_000;
+  const ladder = COST_CURVE_LEAD_HOURS.filter((hours) => hours <= hoursToTca - 0.5);
+  if (ladder.length < 2) return [];
+
+  const meanMotionRadS = meanMotionRevolutionsPerDay * Math.PI * 2 / SECONDS_PER_DAY;
+  const baseline = {
+    r: encounterDirection.r * event.rangeKm,
+    t: encounterDirection.t * event.rangeKm,
+    n: encounterDirection.n * event.rangeKm,
+  };
+  const baselineSquared = event.rangeKm * event.rangeKm;
+  const targetKm = event.rangeKm + assumptions.targetSeparationGainKm;
+  const targetSquared = targetKm * targetKm;
+
+  const curve: LeadTimeCost[] = [];
+  for (const leadHours of ladder) {
+    let best: { deltaVMps: number; direction: ManeuverDirection } | null = null;
+    for (const option of directions) {
+      const perUnit = hcwImpulseDisplacement(meanMotionRadS, leadHours * 3_600, option.vector);
+      if (!perUnit) continue;
+      const displacement = { r: perUnit.radial / 1_000, t: perUnit.alongTrack / 1_000, n: perUnit.normal / 1_000 };
+      const displacementSquared = displacement.r ** 2 + displacement.t ** 2 + displacement.n ** 2;
+      if (!finitePositive(displacementSquared)) continue;
+      const projection = baseline.r * displacement.r + baseline.t * displacement.t + baseline.n * displacement.n;
+      const discriminant = projection * projection + displacementSquared * (targetSquared - baselineSquared);
+      if (discriminant < 0) continue;
+      const deltaVMps = (projection + Math.sqrt(discriminant)) / displacementSquared;
+      if (!finitePositive(deltaVMps)) continue;
+      if (!best || deltaVMps < best.deltaVMps) best = { deltaVMps, direction: option.direction };
+    }
+    if (!best) continue;
+    const propellantKg = propellantForImpulse(assumptions.spacecraftMassKg, best.deltaVMps, assumptions.specificImpulseSeconds);
+    if (propellantKg === null) continue;
+    curve.push({
+      leadHours,
+      deltaVMps: best.deltaVMps,
+      propellantGrams: propellantKg * 1_000,
+      direction: best.direction,
+      withinTestedRange: best.deltaVMps <= COST_CURVE_MAX_DELTA_V_MPS,
+    });
+  }
+  return curve;
+}
+
 export function sanitizeManeuverAssumptions(input: ManeuverAssumptions): ManeuverAssumptions {
   const safe = (value: number, fallback: number, minimum: number, maximum: number) => (
     Number.isFinite(value) ? clamp(value, minimum, maximum) : fallback

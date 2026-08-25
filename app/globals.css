@@ -972,6 +972,20 @@ details li,
 .ops-study-alternatives b, .ops-study-alternatives small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ops-study-alternatives b { color: #c8d5d7; font: 700 7px var(--font-geist-mono), monospace; }
 .ops-study-alternatives small { margin-top: 3px; color: #65747a; font-size: 7px; }
+.ops-study-cost-headline { display: flex; align-items: flex-start; gap: 7px; margin-top: 8px; padding: 8px; border: 1px solid rgba(80,217,179,.3); border-radius: 5px; color: #50d9b3; background: rgba(80,217,179,.05); }
+.ops-study-cost-headline span { min-width: 0; }
+.ops-study-cost-headline strong, .ops-study-cost-headline small { display: block; }
+.ops-study-cost-headline strong { color: #b9e7db; font-size: 8px; line-height: 1.45; }
+.ops-study-cost-headline small { margin-top: 3px; color: #6c9c90; font-size: 7px; line-height: 1.5; }
+.ops-study-cost-curve { display: grid; gap: 4px; margin-top: 7px; }
+.ops-cost-row { display: grid; grid-template-columns: 40px minmax(0,1fr) 44px 38px; align-items: center; gap: 6px; padding: 5px 6px; border: 1px solid #253238; border-radius: 5px; background: #090e10; }
+.ops-cost-row.current { border-color: #4d9985; background: rgba(80,217,179,.07); }
+.ops-cost-row b { color: #c8d5d7; font: 700 7px var(--font-geist-mono), monospace; }
+.ops-cost-row .bar { height: 4px; border-radius: 2px; background: #16202400; box-shadow: inset 0 0 0 1px #1d282d; }
+.ops-cost-row .bar i { display: block; height: 100%; border-radius: 2px; background: linear-gradient(90deg,#50d9b3,#f4b85a); }
+.ops-cost-row em { color: #8fa1a7; font: 400 7px var(--font-geist-mono), monospace; font-style: normal; text-align: right; }
+.ops-cost-row strong { color: #e2ecec; font: 700 8px var(--font-geist-mono), monospace; text-align: right; }
+.ops-study-cost-curve p { margin-top: 5px; color: #5c6b71; font-size: 7px; line-height: 1.55; }
 .ops-pc-gate { display: flex; align-items: flex-start; gap: 7px; margin-top: 8px; padding: 8px; border: 1px solid rgba(244,184,90,.28); border-radius: 5px; color: #f4b85a; background: rgba(244,184,90,.045); }
 .ops-pc-gate span { min-width: 0; }
 .ops-pc-gate strong, .ops-pc-gate small { display: block; }

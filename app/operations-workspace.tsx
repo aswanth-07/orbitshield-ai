@@ -21,7 +21,7 @@ import {
   isFutureConjunction, normalizeMonitoringIds, priorityReason,
 } from './lib/monitoring';
 import {
-  buildManeuverStudy, DEFAULT_MANEUVER_ASSUMPTIONS,
+  buildManeuverStudy, DEFAULT_MANEUVER_ASSUMPTIONS, leadTimeCostCurve,
   sanitizeManeuverAssumptions, type ManeuverAssumptions,
   type ManeuverCandidate, type ManeuverStudy,
 } from './lib/maneuver';
@@ -163,6 +163,17 @@ function ManeuverStudyPanel({
   }), [assumptions, counterpartRecord, event, now, protectedRecord]);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const candidates = useMemo(() => [study.recommended, ...study.alternatives].filter((candidate): candidate is ManeuverCandidate => Boolean(candidate)), [study]);
+  const costCurve = useMemo(() => leadTimeCostCurve({
+    event,
+    protectedRecord,
+    counterpartRecord,
+    now,
+    assumptions,
+  }), [assumptions, counterpartRecord, event, now, protectedRecord]);
+  const costMultiplier = costCurve.length > 1
+    ? costCurve[costCurve.length - 1].propellantGrams / costCurve[0].propellantGrams
+    : 1;
+  const heaviestPropellantGrams = costCurve.length ? costCurve[costCurve.length - 1].propellantGrams : 0;
   const selectedCandidate = candidates.find((candidate) => candidate.id === selectedCandidateId) ?? study.recommended;
 
   function updateAssumption(key: keyof ManeuverAssumptions, value: string) {
@@ -208,6 +219,24 @@ function ManeuverStudyPanel({
           <span><small>Estimated thrust time</small><strong>{selectedCandidate.burnDurationSeconds.toFixed(2)} s</strong></span>
           <span className="locked"><small>Post-manoeuvre Pc</small><strong><Lock size={10} /> CDM required</strong></span>
         </div>
+        {costCurve.length > 1 && <>
+          <div className="ops-study-cost-headline">
+            <Fuel size={14} />
+            <span>
+              <strong>Deciding at T&minus;{costCurve[costCurve.length - 1].leadHours} h instead of T&minus;{costCurve[0].leadHours} h costs {costMultiplier >= 10 ? Math.round(costMultiplier) : costMultiplier.toFixed(1)}&times; the propellant</strong>
+              <small>Same {assumptions.targetSeparationGainKm.toFixed(1)} km separation goal. Required impulse scales with the inverse of lead time, so waiting is paid for in fuel.</small>
+            </span>
+          </div>
+          <details className="ops-study-disclosure"><summary>Cost of waiting, by decision time</summary><div className="ops-study-cost-curve">
+            {costCurve.map((point) => <div key={point.leadHours} className={`ops-cost-row ${point.leadHours === selectedCandidate.leadHours ? 'current' : ''}`}>
+              <b>T&minus;{point.leadHours} h</b>
+              <span className="bar"><i style={{ width: `${Math.max(3, heaviestPropellantGrams ? point.propellantGrams / heaviestPropellantGrams * 100 : 0)}%` }} /></span>
+              <em>{(point.deltaVMps * 100).toFixed(2)} cm/s</em>
+              <strong>{point.propellantGrams.toFixed(1)} g</strong>
+            </div>)}
+            <p>Minimum impulse that reaches the separation goal at each decision time, solved in closed form on the same linearized geometry. Propellant uses the example profile above.</p>
+          </div></details>
+        </>}
         <div className="ops-pc-gate"><Lock size={13} /><span><strong>Probability change requires professional data</strong><small>{study.probabilityStatus}</small></span></div>
         {candidates.length > 1 && <details className="ops-study-disclosure"><summary>Compare two alternatives</summary><div className="ops-study-alternatives">{candidates.map((candidate) => <button key={candidate.id} aria-pressed={candidate.id === selectedCandidate.id} className={candidate.id === selectedCandidate.id ? 'selected' : ''} onClick={() => { setSelectedCandidateId(candidate.id); onCandidateChange(candidate); }}><b>{candidate.direction} · {candidate.deltaVMps.toFixed(2)} m/s</b><small>+{candidate.separationGainAtSourceTcaKm.toFixed(1)} km at source TCA · {candidate.propellantGrams.toFixed(1)} g</small></button>)}</div></details>}
         <details className="ops-study-disclosure"><summary>Validation gates</summary><div className="ops-study-checks"><span><i className="ready" /> Linearized RTN geometry modeled</span><span><i /> Covariance-backed Pc unavailable</span><span><i /> Full-catalogue re-screen not run</span><span><i /> Operator approval required</span></div></details>

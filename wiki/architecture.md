@@ -67,6 +67,14 @@ that meet the configured added-separation goal at the original source TCA, then
 chooses the lowest delta-v. The rocket equation estimates propellant and thrust
 time from an explicitly editable example spacecraft profile.
 
+`leadTimeCostCurve` prices the same separation goal at 48, 36, 24, 18, 12, 6
+and 3 hour decision times. Separation at the source TCA is quadratic in the
+impulse magnitude along a fixed direction, so the minimum delta-v has a closed
+form and does not need the sampled sweep that ranks candidates. The panel shows
+the propellant multiplier between the earliest and latest decision time, and
+the required impulse rises with the inverse of lead time because the along-track
+secular term dominates.
+
 The green candidate path is a linearized HCW offset over the nominal SGP4 path.
 It is a visual preview, not a new ephemeris. The UI keeps post-manoeuvre
 probability null because public elements do not include the covariance and
