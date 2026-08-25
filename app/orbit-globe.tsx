@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import Globe, { type GlobeMethods } from 'react-globe.gl';
 import * as THREE from 'three';
 
@@ -8,6 +8,7 @@ import {
   objectMarkerColor,
   orbitVisualStyle,
   SATELLITE_COLOR,
+  type TcaReplayFrame,
   type TcaReplayPhase,
 } from './lib/collision-visualization';
 import { prepareOmm, propagateOmm, propagatePreparedOmm, sampleOrbitPath } from './lib/orbit';
@@ -33,6 +34,7 @@ type OrbitGlobeProps = {
   showFleetLabels?: boolean;
   replayPhase: TcaReplayPhase | null;
   replayActive: boolean;
+  replayFrameRef: RefObject<TcaReplayFrame | null>;
   onObjectSelect: (catalogId: number) => void;
 };
 
@@ -48,18 +50,57 @@ type ScenePoint = PropagatedObject & {
 
 const RENDERER_CONFIG = { antialias: false, alpha: true, powerPreference: 'high-performance' as const };
 
+function closestApproachTarget() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+  context.clearRect(0, 0, 128, 128);
+  context.strokeStyle = '#ff4452';
+  context.lineWidth = 7;
+  context.shadowColor = '#ff2438';
+  context.shadowBlur = 18;
+  context.beginPath();
+  context.arc(64, 64, 39, 0, Math.PI * 2);
+  context.stroke();
+  context.shadowBlur = 8;
+  context.lineWidth = 4;
+  context.beginPath();
+  context.moveTo(64, 5);
+  context.lineTo(64, 34);
+  context.moveTo(64, 94);
+  context.lineTo(64, 123);
+  context.moveTo(5, 64);
+  context.lineTo(34, 64);
+  context.moveTo(94, 64);
+  context.lineTo(123, 64);
+  context.stroke();
+  context.fillStyle = '#fff';
+  context.beginPath();
+  context.arc(64, 64, 4, 0, Math.PI * 2);
+  context.fill();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+  }));
+  sprite.scale.set(11, 11, 1);
+  sprite.name = 'closest-approach-target';
+  return sprite;
+}
+
 function markerObject(point: ScenePoint) {
   const group = new THREE.Group();
   const material = new THREE.MeshBasicMaterial({ color: point.color, transparent: true, opacity: 0.96 });
   const sphere = new THREE.Mesh(new THREE.SphereGeometry(point.radius * 2.4, 14, 14), material);
   group.add(sphere);
   if (point.markerKind === 'cpa') {
-    const crosshair = new THREE.Mesh(
-      new THREE.TorusGeometry(point.radius * 4.8, 0.055, 8, 32),
-      new THREE.MeshBasicMaterial({ color: point.color, transparent: true, opacity: 0.88 }),
-    );
-    crosshair.rotation.x = Math.PI / 2;
-    group.add(crosshair);
+    const target = closestApproachTarget();
+    if (target) group.add(target);
   } else if (point.selected) {
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(point.radius * 4.6, 0.08, 8, 24),
@@ -115,6 +156,7 @@ export default function OrbitGlobe({
   showFleetLabels = false,
   replayPhase,
   replayActive,
+  replayFrameRef,
   onObjectSelect,
 }: OrbitGlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -125,6 +167,7 @@ export default function OrbitGlobe({
   const cloudRef = useRef<THREE.Points | null>(null);
   const threatCloudRef = useRef<THREE.Points | null>(null);
   const markerCacheRef = useRef(new Map<string, THREE.Object3D>());
+  const markerByCatalogIdRef = useRef(new Map<number, THREE.Object3D>());
   const onObjectSelectRef = useRef(onObjectSelect);
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null);
   const followedTargetRef = useRef<THREE.Vector3 | null>(null);
@@ -156,9 +199,13 @@ export default function OrbitGlobe({
     const item = point as ScenePoint;
     const key = `${item.markerKind}:${item.catalogId}:${item.color}:${item.radius}:${item.selected ? 1 : 0}:${item.selectable ? 1 : 0}`;
     const cached = markerCacheRef.current.get(key);
-    if (cached) return cached;
+    if (cached) {
+      markerByCatalogIdRef.current.set(item.catalogId, cached);
+      return cached;
+    }
     const marker = markerObject(item);
     markerCacheRef.current.set(key, marker);
+    markerByCatalogIdRef.current.set(item.catalogId, marker);
     return marker;
   }, []);
   const markerLabel = useCallback((point: object) => {
@@ -492,11 +539,11 @@ export default function OrbitGlobe({
     return {
       ...center,
       catalogId: -1,
-      name: 'Closest approach',
+      name: 'TCA closest approach target',
       epoch: selectedEvent.tca,
-      color: '#f4f7f9',
-      radius: 0.18,
-      role: 'closest approach point · public-element approximation',
+      color: '#ff4452',
+      radius: 0.22,
+      role: 'red closest-approach target · public-element approximation',
       selected: true,
       selectable: false,
       markerKind: 'cpa',
@@ -531,18 +578,93 @@ export default function OrbitGlobe({
     [cpaPoint, interactivePoints, selectedThreatPoints, showEncounterGeometry, tcaScenePoints, threatIds],
   );
   const pairLabels = useMemo(() => scenePoints.filter((point) => (
-    selectedIds.includes(point.catalogId)
+    point.markerKind === 'cpa'
+    || (!replayActive && selectedIds.includes(point.catalogId))
     || (showFleetLabels && fleetIds.includes(point.catalogId))
   )).map((point) => ({
     ...point,
-    label: selectedIds.includes(point.catalogId)
+    label: point.markerKind === 'cpa'
+      ? 'TCA · CLOSEST APPROACH'
+      : selectedIds.includes(point.catalogId)
       ? point.markerKind === 'debris'
         ? `DEBRIS · ${point.name}`
         : point.catalogId === reviewPair?.protectedCatalogId
           ? `PROTECTED · ${point.name}`
           : `COUNTERPART · ${point.name}`
       : `MONITORED · ${point.name}`,
-  })), [fleetIds, reviewPair, scenePoints, selectedIds, showFleetLabels]);
+  })), [fleetIds, replayActive, reviewPair, scenePoints, selectedIds, showFleetLabels]);
+
+  useEffect(() => {
+    const globe = globeRef.current;
+    if (!globeReady || !globe || !replayActive || !selectedEvent || !reviewPair) return;
+    const preparedById = new Map(preparedFocusRecords.map(({ prepared }) => [Number(prepared.record.NORAD_CAT_ID), prepared]));
+    preparedThreats.forEach((prepared, catalogId) => preparedById.set(catalogId, prepared));
+    const protectedRecord = preparedById.get(reviewPair.protectedCatalogId);
+    const counterpartRecord = preparedById.get(reviewPair.counterpartCatalogId);
+    if (!protectedRecord || !counterpartRecord) return;
+
+    const controls = globe.controls();
+    controls.enableRotate = false;
+    controls.enablePan = false;
+    controls.enableZoom = false;
+    controls.autoRotate = false;
+    let animationFrame = 0;
+
+    const sceneVector = (point: PropagatedObject) => {
+      const coordinates = globe.getCoords(point.lat, point.lng, point.altitude);
+      return new THREE.Vector3(coordinates.x, coordinates.y, coordinates.z);
+    };
+
+    const desiredCamera = (target: THREE.Vector3, outwardDistance: number, eastDistance: number, northDistance: number) => {
+      const outward = target.clone().normalize();
+      const east = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), outward);
+      if (east.lengthSq() < 0.001) east.set(1, 0, 0);
+      east.normalize();
+      const north = new THREE.Vector3().crossVectors(outward, east).normalize();
+      return target.clone()
+        .add(outward.multiplyScalar(outwardDistance))
+        .add(east.multiplyScalar(eastDistance))
+        .add(north.multiplyScalar(northDistance));
+    };
+
+    const moveMarker = (catalogId: number, position: THREE.Vector3) => {
+      markerByCatalogIdRef.current.get(catalogId)?.position.copy(position);
+    };
+
+    const tick = () => {
+      const replayFrame = replayFrameRef.current;
+      if (replayFrame) {
+        const date = new Date(replayFrame.simulationTime);
+        const protectedPoint = propagatePreparedOmm(protectedRecord, date);
+        const counterpartPoint = propagatePreparedOmm(counterpartRecord, date);
+        if (protectedPoint && counterpartPoint) {
+          const protectedPosition = sceneVector(protectedPoint);
+          const counterpartPosition = sceneVector(counterpartPoint);
+          moveMarker(reviewPair.protectedCatalogId, protectedPosition);
+          moveMarker(reviewPair.counterpartCatalogId, counterpartPosition);
+
+          if (replayFrame.phase === 'follow') {
+            globe.camera().position.lerp(desiredCamera(protectedPosition, 46, 18, 10), 0.14);
+            controls.target.lerp(protectedPosition, 0.2);
+          } else {
+            const center = protectedPosition.clone().add(counterpartPosition).multiplyScalar(0.5);
+            if (replayFrame.phase === 'acquire') {
+              globe.camera().position.lerp(desiredCamera(center, 82, 24, 12), 0.12);
+              controls.target.lerp(center, 0.18);
+            } else {
+              globe.camera().position.lerp(desiredCamera(center, 118, 58, 38), 0.16);
+              controls.target.lerp(center, 0.24);
+            }
+          }
+          controls.update();
+        }
+      }
+      animationFrame = window.requestAnimationFrame(tick);
+    };
+
+    animationFrame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [globeReady, preparedFocusRecords, preparedThreats, replayActive, replayFrameRef, reviewPair, selectedEvent]);
 
   const orbitPathMinute = selectedEvent
     ? Math.floor(new Date(selectedEvent.tca).getTime() / 60_000)
@@ -620,6 +742,11 @@ export default function OrbitGlobe({
     controls.screenSpacePanning = true;
     controls.zoomToCursor = true;
     controls.autoRotate = cameraMode === 'global';
+
+    if (replayActive) {
+      controls.autoRotate = false;
+      return;
+    }
 
     if (cameraMode === 'free') {
       followedTargetRef.current = null;

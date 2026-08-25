@@ -26,13 +26,15 @@ centre keeps the active catalogue, screened debris, monitored orbits and TCA
 replay in one WebGL scene. The right rail renders the grounded alert explanation,
 verified metrics, model coverage and analyst workflow.
 
-The replay samples the selected pair on a bounded interface cadence and lets the
-globe camera interpolate between those verified SGP4 states. Monitored
-background objects, screened debris and the optional full catalogue use
-separate slower time buckets. Prepared SGP4 records and cached Three.js marker
-geometry avoid repeated parsing and allocation. The worker allows one catalogue
-propagation in flight and retains only the newest queued time, which prevents
-replay requests from building a backlog.
+The replay clock writes verified SGP4 states to a shared frame reference. A
+WebGL animation loop moves only the selected pair and camera, so the monitoring
+rails do not render on every frame. Monitored background objects, screened
+debris and the optional full catalogue use separate slower time buckets.
+Prepared SGP4 records and cached Three.js marker geometry avoid repeated parsing
+and allocation. The worker allows one catalogue propagation in flight and
+retains only the newest queued time, which prevents replay requests from
+building a backlog. A red screen-facing target and label mark the computed
+closest-approach midpoint at TCA.
 
 ## Public screening lane
 

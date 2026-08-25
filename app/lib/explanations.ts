@@ -16,9 +16,9 @@ export function explainConjunction(event: ConjunctionRecord): EventExplanation {
 
   const recommendedSteps =
     event.priority === 'review'
-      ? ['Request newer tracking or operator CDM data.', 'Escalate the event to a flight-dynamics analyst.', 'Reassess after the next source update.']
+      ? ['Request newer tracking and operator CDM data.', 'Ask flight dynamics to verify covariance, sensitivity and mission constraints.', 'Let mission authority choose monitoring, operator coordination or a manoeuvre study.']
       : event.priority === 'watch'
-        ? ['Continue monitoring subsequent screening updates.', 'Check whether newer orbit data changes the priority.', 'Escalate if probability rises or uncertainty remains high.']
+        ? ['Continue monitoring subsequent screening updates.', 'Check whether newer orbit data changes the uncertainty or priority.', 'Escalate to flight dynamics if risk rises or uncertainty remains high.']
         : ['Keep the event in the watchlist.', 'Review it again when the source data refreshes.'];
 
   return {

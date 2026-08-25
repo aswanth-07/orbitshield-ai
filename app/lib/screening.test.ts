@@ -37,6 +37,8 @@ describe('prototype screening policy', () => {
     expect(explanation.generator).toBe('deterministic');
     expect(explanation.whatIsHappening).toContain('0.80 kilometres');
     expect(explanation.limitation).toContain('not a confirmed collision');
+    expect(explanation.recommendedSteps.join(' ')).toContain('flight dynamics');
+    expect(explanation.recommendedSteps.join(' ')).toContain('mission authority');
     expect(explanation.recommendedSteps.join(' ')).not.toMatch(/perform|execute|burn/i);
   });
 });

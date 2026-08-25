@@ -12,7 +12,7 @@ import replayFixture from './data/esa-validation-replay.json';
 import benchmarkFixture from './data/model-benchmark.json';
 import {
   animateTcaReplay, isSatelliteObjectType, objectMarkerColor,
-  TCA_REPLAY_DURATION_MS, tcaReplayStart, type TcaReplayPhase,
+  TCA_REPLAY_DURATION_MS, tcaReplayStart, type TcaReplayFrame, type TcaReplayPhase,
 } from './lib/collision-visualization';
 import { explainConjunction } from './lib/explanations';
 import { INDIA_EO_FLEET } from './lib/fleet';
@@ -89,7 +89,7 @@ function EncounterOverlay({ event, protectedId, threat }: {
   const counterpart = counterpartFor(event, protectedId);
   const type = threat?.objectType === 'R/B' ? 'ROCKET BODY' : isSatelliteObjectType(threat?.objectType) ? 'SATELLITE' : 'DEBRIS';
   return <div className="ops-encounter-overlay" role="img" aria-label="Magnified closest-approach view">
-    <div className="ops-encounter-head"><span>MAGNIFIED ENCOUNTER</span><b>NOT TO EARTH SCALE</b></div>
+    <div className="ops-encounter-head"><span><i /> TCA TARGET · CLOSEST APPROACH</span><b>MAGNIFIED, NOT TO EARTH SCALE</b></div>
     <div className="ops-encounter-geometry">
       <span className="ops-protected"><Satellite size={18} /><b>{cleanName(event.primaryCatalogId === protectedId ? event.primaryName : event.secondaryName)}</b></span>
       <i><strong>{metric(event.rangeKm, 'km', 3)}</strong><small>reported miss range</small></i>
@@ -120,7 +120,7 @@ export default function OperationsWorkspace() {
   const simulationRef = useRef(0);
   const lastTick = useRef(0);
   const replayCancel = useRef<(() => void) | null>(null);
-  const replayLastCommitRef = useRef(0);
+  const replayFrameRef = useRef<TcaReplayFrame | null>(null);
   const replayPhaseRef = useRef<TcaReplayPhase | null>(null);
 
   useEffect(() => {
@@ -252,8 +252,8 @@ export default function OperationsWorkspace() {
     setReplayActive(false);
     setReplayPhase(null);
     setReplaySpeed(0);
+    replayFrameRef.current = null;
     replayPhaseRef.current = null;
-    replayLastCommitRef.current = 0;
   }, []);
 
   const runTcaReplay = useCallback(() => {
@@ -288,7 +288,7 @@ export default function OperationsWorkspace() {
       },
       onUpdate: (frame) => {
         simulationRef.current = frame.simulationTime;
-        const frameNow = performance.now();
+        replayFrameRef.current = frame;
         const phaseChanged = replayPhaseRef.current !== frame.phase;
         if (phaseChanged) {
           replayPhaseRef.current = frame.phase;
@@ -296,12 +296,10 @@ export default function OperationsWorkspace() {
           if (frame.phase === 'acquire') setCameraMode('pair-follow');
           if (frame.phase === 'encounter') setCameraMode('encounter');
         }
-        if (!frame.done && !phaseChanged && frameNow - replayLastCommitRef.current < 128) return;
-        replayLastCommitRef.current = frameNow;
-        setSimulationTime(frame.simulationTime);
       },
       onComplete: () => {
         replayCancel.current = null;
+        replayFrameRef.current = null;
         simulationRef.current = target;
         setSimulationTime(target);
         setReplayActive(false);
@@ -401,6 +399,7 @@ export default function OperationsWorkspace() {
           showFleetLabels={!replayActive}
           replayPhase={replayPhase}
           replayActive={replayActive}
+          replayFrameRef={replayFrameRef}
           onObjectSelect={selectFleetSatellite}
         />
         <div className="ops-globe-status">
@@ -409,7 +408,7 @@ export default function OperationsWorkspace() {
           <small>{selectedEvent ? `${priorityLabels[selectedEvent.priority]} alert · ${countdown(selectedEvent.tca, simulationTime)}` : 'Select a monitored satellite or alert'}</small>
         </div>
         <div className="ops-layer-legend"><span><i className="sat" /> Monitored satellites</span><span><i className="debris" /> Screened debris</span><span><i className="orbit" /> Propagated orbit</span></div>
-        {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected satellite orbit</span><span><i className="counterpart" style={{ borderColor: objectMarkerColor(selectedThreat?.objectType, selectedThreat?.size) }} /> Counterpart orbit</span></div>}
+        {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected satellite orbit</span><span><i className="counterpart" style={{ borderColor: objectMarkerColor(selectedThreat?.objectType, selectedThreat?.size) }} /> Counterpart orbit</span><span><i className="tca-target" /> Red target marks closest approach</span></div>}
         {selectedEvent && selectedProtectedId && replayPhase === 'encounter' && <EncounterOverlay event={selectedEvent} protectedId={selectedProtectedId} threat={selectedThreat} />}
         <div className="ops-globe-controls">
           <div className="ops-time-control"><button onClick={() => { cancelReplay(); setPlaying((value) => !value); }} aria-label={playing ? 'Pause orbital animation' : 'Play orbital animation'}>{playing ? <Pause size={14} /> : <Play size={14} />}</button><select value={speed} onChange={(event) => setSpeed(Number(event.target.value))} aria-label="Orbital animation speed"><option value={1}>1×</option><option value={10}>10×</option><option value={60}>60×</option></select><span>{dateUtc(new Date(simulationTime).toISOString(), true)}</span></div>
@@ -450,6 +449,7 @@ export default function OperationsWorkspace() {
 
           <section className="ops-action-plan">
             <div className="ops-section-label"><span>RECOMMENDED WORKFLOW</span><b>HUMAN DECISION</b></div>
+            <p className="ops-human-decision">A qualified operator checks fresher tracking and uncertainty, asks flight dynamics to verify the encounter, then chooses continued monitoring, operator coordination or a formal manoeuvre study. Human approval matters because every orbit change consumes mission resources and can create new conjunctions.</p>
             <ol>{explanation.recommendedSteps.map((step, index) => <li key={step}><b>{String(index + 1).padStart(2, '0')}</b><span>{step}</span></li>)}</ol>
           </section>
 

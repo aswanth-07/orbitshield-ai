@@ -20,7 +20,7 @@ and a controlled escalation workflow.
 3. The right rail explains what is happening, why the alert fired, the verified
    metrics, the model coverage state, and the next review steps.
 4. Accelerated TCA follow keeps the protected satellite and counterpart visible
-   while time advances to closest approach.
+   while time advances to a red closest-approach target.
 5. Inline model evidence compares five trained families and shows the held-out
    ESA validation result without presenting it as the score for a public
    SOCRATES event.
@@ -36,6 +36,27 @@ The open tier uses public data for automated monitoring, context and transparent
 screening. A future professional tier connects private CDMs, model inference,
 grounded language-model narration, notifications and audit history after formal
 operational validation.
+
+## Why a human reviews the alert
+
+Tracking updates change the estimated orbit and its uncertainty. A high model
+score therefore identifies an event that deserves scarce analyst time; it does
+not settle an operational decision. A qualified mission team can request newer
+tracking, obtain operator CDMs, verify covariance and sensitivity, coordinate
+with the other spacecraft operator, and run a manoeuvre study under mission
+constraints. Mission authority then chooses continued monitoring, coordination
+or an approved orbit change. Human approval protects fuel, mission objectives
+and the spacecraft's future conjunction environment.
+
+## Business case
+
+Small operators receive large screening queues but may not employ a
+round-the-clock conjunction analyst. OrbitShield acts as the triage and evidence
+layer between raw alerts and specialist review. The product reduces time spent
+reading low-value alerts, gives every escalation the same evidence structure,
+and preserves an audit trail for operators, agencies and insurers. A
+professional subscription can combine private CDM connectors, fleet watchlists,
+validated model scoring, team notifications and review history.
 
 ## Hackathon boundary
 
