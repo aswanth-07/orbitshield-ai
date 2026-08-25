@@ -228,6 +228,11 @@ export default function OrbitGlobe({
   const labelAltitude = useCallback((point: object) => (point as ScenePoint).altitude + 0.045, []);
   const labelColor = useCallback((point: object) => (point as ScenePoint).color, []);
   const labelSize = useCallback((point: object) => (point as ScenePoint).markerKind === 'cpa' ? 0.48 : 0.36, []);
+  const labelDotRadius = useCallback((point: object) => {
+    const item = point as ScenePoint;
+    if (item.markerKind === 'cpa') return 0;
+    return item.selected ? 0.24 : 0.18;
+  }, []);
   const pathColor = useCallback((path: object) => (path as OrbitPath).color, []);
   const pathStroke = useCallback((path: object) => (path as OrbitPath).stroke ?? 0.5, []);
   const pathDashLength = useCallback((path: object) => (path as OrbitPath).dashLength ?? 1, []);
@@ -948,7 +953,7 @@ export default function OrbitGlobe({
         labelText="label"
         labelSize={labelSize}
         labelColor={labelColor}
-        labelDotRadius={0}
+        labelDotRadius={labelDotRadius}
         labelResolution={2}
         pathsData={paths}
         pathPoints="points"

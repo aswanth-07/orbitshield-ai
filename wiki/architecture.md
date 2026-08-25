@@ -37,6 +37,8 @@ The replay clock writes verified SGP4 states to a shared frame reference. A
 WebGL animation loop moves only the selected pair and camera, so the monitoring
 rails do not render on every frame. Monitored background objects, screened
 debris and the optional full catalogue use separate slower time buckets.
+Every monitored label includes a blue anchor dot at its propagated position so
+the satellite remains distinguishable from its orbit path at globe scale.
 The live simulation clock advances every 100 milliseconds and supplies the
 catalogue, monitored fleet and risk-object layers. Accelerated time appears
 only inside the bounded TCA replay.
