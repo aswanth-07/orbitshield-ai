@@ -45,7 +45,7 @@ const fleetOrbitSnapshot = fleetOrbitFixture as {
   objects: Array<{ catalogId: number; epoch: string; tleLine1: string; tleLine2: string }>;
 };
 const defaultFleetIds = INDIA_EO_FLEET.objects.map((item) => item.catalogId);
-const MONITORING_STORAGE_KEY = 'orbitshield.monitoring-list.v1';
+const MONITORING_STORAGE_KEY = 'orbitshield.monitoring-list.v2';
 const priorityLabels: Record<ScreeningPriority, string> = {
   review: 'Review', watch: 'Watch', low: 'Low', 'needs-data': 'Needs data',
 };
@@ -102,8 +102,8 @@ function EncounterOverlay({ event, protectedId, threat, maneuverCandidate }: {
     </div>
     {maneuverCandidate && <div className="ops-avoidance-comparison">
       <span><b>NO BURN</b><i><em style={{ width: `${baselineRatio}%` }} /></i><strong>{metric(event.rangeKm, 'km', 3)}</strong></span>
-      <span className="candidate"><b>HCW PREVIEW</b><i><em /></i><strong>{maneuverCandidate.separationAtSourceTcaKm.toFixed(3)} km</strong></span>
-      <small>+{maneuverCandidate.separationGainAtSourceTcaKm.toFixed(2)} km at the original TCA. Post-manoeuvre Pc still requires CDM validation.</small>
+      <span className="candidate"><b>SGP4 + RTN PREVIEW</b><i><em /></i><strong>{maneuverCandidate.separationAtSourceTcaKm.toFixed(3)} km</strong></span>
+      <small>+{maneuverCandidate.separationGainAtSourceTcaKm.toFixed(2)} km at the original TCA · {maneuverCandidate.geometricExposureReductionPercent.toFixed(1)}% geometric exposure reduction proxy, not collision probability. CDM validation remains required.</small>
     </div>}
   </div>;
 }
@@ -152,6 +152,7 @@ function ManeuverStudyPanel({
   onCandidateChange: (candidate: ManeuverCandidate | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [pathVisible, setPathVisible] = useState(false);
   const [assumptions, setAssumptions] = useState(DEFAULT_MANEUVER_ASSUMPTIONS);
   const [drafts, setDrafts] = useState<Partial<Record<keyof ManeuverAssumptions, string>>>({});
   const study = useMemo(() => buildManeuverStudy({
@@ -183,7 +184,7 @@ function ManeuverStudyPanel({
     setAssumptions(next);
     setSelectedCandidateId(null);
     const nextStudy = buildManeuverStudy({ event, protectedRecord, counterpartRecord, now, assumptions: next });
-    onCandidateChange(expanded ? nextStudy.recommended : null);
+    onCandidateChange(expanded && pathVisible ? nextStudy.recommended : null);
   }
 
   function commitAssumption(key: keyof ManeuverAssumptions) {
@@ -195,19 +196,32 @@ function ManeuverStudyPanel({
   }
 
   return <section className={`ops-maneuver-study ${expanded ? 'expanded' : ''}`}>
-    <div className="ops-section-label"><span>ADVISORY MANOEUVRE STUDY</span>{expanded ? <button className="ops-study-collapse" onClick={() => { setExpanded(false); onCandidateChange(null); }}>Collapse</button> : <b><Route size={11} /> PHYSICS PREVIEW</b>}</div>
+    <div className="ops-section-label"><span>ADVISORY MANOEUVRE STUDY</span>{expanded ? <button className="ops-study-collapse" onClick={() => { setExpanded(false); setPathVisible(false); onCandidateChange(null); }}>Collapse</button> : <b><Route size={11} /> SGP4 + RTN</b>}</div>
     {!expanded ? <>
-      <p>Compare small R-T-N burns by modeled path separation and propellant before sending one candidate to flight dynamics.</p>
-      <button className="ops-study-launch" onClick={() => { setExpanded(true); onCandidateChange(study.recommended); }} disabled={study.status !== 'ready'}>
-        <Route size={15} /><span><strong>{study.status === 'ready' ? 'Study avoidance options' : 'Study unavailable'}</strong><small>{study.status === 'ready' ? `R-T-N sweep using the available T−${study.recommended?.leadHours ?? 0} h planning window` : study.reason}</small></span>
+      <p>Compute the exact lowest-fuel R-T-N offset from the SGP4 reference orbit, then reveal it on the globe when you are ready to compare paths.</p>
+      <button className="ops-study-launch" onClick={() => setExpanded(true)} disabled={study.status !== 'ready'}>
+        <Route size={15} /><span><strong>{study.status === 'ready' ? 'Find lowest-fuel path' : 'Study unavailable'}</strong><small>{study.status === 'ready' ? `Exact optimizer using the available T−${study.recommended?.leadHours ?? 0} h planning window` : study.reason}</small></span>
       </button>
     </> : <>
       <div className="ops-study-banner"><ShieldCheck size={14} /><span><strong>Candidate for review, not a spacecraft command</strong><small>Operator validation and a full-catalogue re-screen remain mandatory.</small></span></div>
       {selectedCandidate ? <>
         <div className="ops-study-candidate-head">
-          <span><small>LOWEST-IMPULSE CANDIDATE MEETING THE GEOMETRY GOAL</small><strong>{selectedCandidate.direction} · {selectedCandidate.deltaVMps.toFixed(2)} m/s</strong><em>{selectedCandidate.directionLabel} · equivalent impulse {selectedCandidate.leadHours} h before TCA</em></span>
+          <span><small>EXACT LOWEST-PROPELLANT CANDIDATE · MINIMUM PATH MOVEMENT</small><strong>{selectedCandidate.direction} · {selectedCandidate.deltaVMps.toFixed(3)} m/s</strong><em>{selectedCandidate.directionLabel} · equivalent impulse {selectedCandidate.leadHours} h before TCA</em></span>
           <b>{selectedCandidate.propellantGrams.toFixed(1)} g<small>for the {assumptions.spacecraftMassKg.toLocaleString('en-IN')} kg example profile</small></b>
         </div>
+        <button
+          className={`ops-suggested-path-toggle ${pathVisible ? 'active' : ''}`}
+          aria-pressed={pathVisible}
+          onClick={() => {
+            const nextVisible = !pathVisible;
+            setPathVisible(nextVisible);
+            onCandidateChange(nextVisible ? selectedCandidate : null);
+          }}
+        >
+          <Route size={16} />
+          <span><strong>{pathVisible ? 'Hide suggested path' : 'Show suggested SGP4 path'}</strong><small>SGP4 reference + optimized RTN impulse · {selectedCandidate.propellantGrams.toFixed(1)} g · +{selectedCandidate.separationGainAtSourceTcaKm.toFixed(2)} km</small></span>
+          <b>{pathVisible ? 'VISIBLE' : 'PREVIEW'}</b>
+        </button>
         <div className="ops-study-geometry" aria-label={`Source separation ${metric(event.rangeKm, 'kilometres', 3)}. Candidate separation ${selectedCandidate.separationAtSourceTcaKm.toFixed(3)} kilometres at the original TCA.`}>
           <span className="baseline"><i /><b>{metric(event.rangeKm, 'km', 3)}</b><small>source separation at TCA</small></span>
           <em><Route size={13} /> +{selectedCandidate.separationGainAtSourceTcaKm.toFixed(2)} km</em>
@@ -217,6 +231,7 @@ function ManeuverStudyPanel({
           <span><small>Equivalent impulse epoch</small><strong>{formatIst(selectedCandidate.burnTime, { seconds: true })}</strong></span>
           <span><small>Path displacement at source TCA</small><strong>{selectedCandidate.displacementAtTcaKm.toFixed(2)} km</strong></span>
           <span><small>Estimated thrust time</small><strong>{selectedCandidate.burnDurationSeconds.toFixed(2)} s</strong></span>
+          <span><small>Geometric exposure proxy</small><strong>{selectedCandidate.geometricExposureReductionPercent.toFixed(1)}% lower</strong></span>
           <span className="locked"><small>Post-manoeuvre Pc</small><strong><Lock size={10} /> CDM required</strong></span>
         </div>
         {costCurve.length > 1 && <>
@@ -238,7 +253,7 @@ function ManeuverStudyPanel({
           </div></details>
         </>}
         <div className="ops-pc-gate"><Lock size={13} /><span><strong>Probability change requires professional data</strong><small>{study.probabilityStatus}</small></span></div>
-        {candidates.length > 1 && <details className="ops-study-disclosure"><summary>Compare two alternatives</summary><div className="ops-study-alternatives">{candidates.map((candidate) => <button key={candidate.id} aria-pressed={candidate.id === selectedCandidate.id} className={candidate.id === selectedCandidate.id ? 'selected' : ''} onClick={() => { setSelectedCandidateId(candidate.id); onCandidateChange(candidate); }}><b>{candidate.direction} · {candidate.deltaVMps.toFixed(2)} m/s</b><small>+{candidate.separationGainAtSourceTcaKm.toFixed(1)} km at source TCA · {candidate.propellantGrams.toFixed(1)} g</small></button>)}</div></details>}
+        {candidates.length > 1 && <details className="ops-study-disclosure"><summary>Compare two alternatives</summary><div className="ops-study-alternatives">{candidates.map((candidate) => <button key={candidate.id} aria-pressed={candidate.id === selectedCandidate.id} className={candidate.id === selectedCandidate.id ? 'selected' : ''} onClick={() => { setSelectedCandidateId(candidate.id); if (pathVisible) onCandidateChange(candidate); }}><b>{candidate.direction} · {candidate.deltaVMps.toFixed(3)} m/s</b><small>+{candidate.separationGainAtSourceTcaKm.toFixed(1)} km at source TCA · {candidate.propellantGrams.toFixed(1)} g</small></button>)}</div></details>}
         <details className="ops-study-disclosure"><summary>Validation gates</summary><div className="ops-study-checks"><span><i className="ready" /> Linearized RTN geometry modeled</span><span><i /> Covariance-backed Pc unavailable</span><span><i /> Full-catalogue re-screen not run</span><span><i /> Operator approval required</span></div></details>
         <button className="ops-study-export" onClick={() => downloadManeuverCandidate(event, selectedCandidate, assumptions, study)}><Fuel size={14} /><span><strong>Export for flight-dynamics review</strong><small>Method, assumptions, geometry and validation gates in JSON</small></span></button>
       </> : <p className="ops-study-unavailable">{study.reason}</p>}
@@ -713,7 +728,7 @@ export default function OperationsWorkspace() {
             {fleetSearchResults.map((record) => <button key={record.NORAD_CAT_ID} onClick={() => addMonitoredSatellite(Number(record.NORAD_CAT_ID))}><span><strong>{cleanName(record.OBJECT_NAME)}</strong><small>NORAD {record.NORAD_CAT_ID} · {record.COUNTRY_CODE || 'owner unavailable'}</small></span><Plus size={13} /></button>)}
             {fleetSearch.trim() && !fleetSearchResults.length && <small>No unmonitored active payload matched this search.</small>}
           </div>
-          <button className="ops-reset-fleet" onClick={resetMonitoringList}><RotateCcw size={12} /> Reset six-satellite demo list</button>
+          <button className="ops-reset-fleet" onClick={resetMonitoringList}><RotateCcw size={12} /> Reset eight-satellite mission list</button>
         </div>}
         <div className="ops-fleet-list">
           {monitoredFleetObjects.map((satellite) => {
@@ -787,7 +802,7 @@ export default function OperationsWorkspace() {
           <small>{selectedEvent ? `${priorityLabels[selectedEvent.priority]} screening candidate · TCA ${formatIst(selectedEvent.tca, { seconds: true })}` : selectedRecord ? `${monitoredIdSet.has(Number(selectedRecord.NORAD_CAT_ID)) ? 'Monitored' : 'Catalogue'} satellite · NORAD ${selectedRecord.NORAD_CAT_ID}` : 'Select a satellite, screening candidate or ML alert'} · Orbit elements {catalog?.status ?? 'loading'}</small>
         </div>
         <div className="ops-layer-legend"><span><i className="catalog" /> Catalogue satellites</span><span><i className="sat" /> Monitored satellites</span><span><i className="debris" /> Screened debris</span><span><i className="orbit" /> Monitored orbits</span></div>
-        {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected approach to TCA</span><span><i className="counterpart" /> Counterpart approach to TCA</span>{selectedManeuverCandidate && <span><i className="maneuver" /> Linearized HCW path preview</span>}<span><i className="tca-target" /> Closest approach</span></div>}
+        {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected closed SGP4 orbit</span><span><i className="counterpart" /> Counterpart closed SGP4 orbit</span>{selectedManeuverCandidate && <span><i className="maneuver" /> Suggested SGP4 + RTN path</span>}<span><i className="tca-target" /> Closest approach</span></div>}
         {selectedEvent && selectedProtectedId && replayPhase === 'encounter' && <EncounterOverlay event={selectedEvent} protectedId={selectedProtectedId} threat={selectedThreat} maneuverCandidate={selectedManeuverCandidate} />}
         <div className="ops-globe-controls">
           <div className="ops-time-control"><button disabled={replayActive} onClick={() => setPlaying((value) => !value)} aria-label={playing ? 'Pause orbital animation' : 'Play orbital animation'}>{playing ? <Pause size={14} /> : <Play size={14} />}</button><span><b>{replayActive ? 'REPLAY TIME' : 'SIMULATION TIME'}</b><em ref={replayClockValueRef}>{formatIst(simulationTime, { seconds: true })}</em></span></div>

@@ -938,6 +938,15 @@ details li,
 .ops-study-launch strong, .ops-study-launch small, .ops-study-export strong, .ops-study-export small, .ops-monitor-toggle strong, .ops-monitor-toggle small { display: block; }
 .ops-study-launch strong, .ops-study-export strong, .ops-monitor-toggle strong { color: #dff6f0; font-size: 10px; }
 .ops-study-launch small, .ops-study-export small, .ops-monitor-toggle small { margin-top: 3px; color: #72958c; font-size: 8px; line-height: 1.35; }
+.ops-suggested-path-toggle { width: 100%; min-height: 52px; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 9px; margin-top: 10px; padding: 9px 10px; border: 1px solid rgba(80,217,179,.46); border-radius: 7px; background: linear-gradient(100deg,rgba(80,217,179,.11),rgba(53,215,255,.035)); color: #66e1c0; text-align: left; cursor: pointer; }
+.ops-suggested-path-toggle:hover { border-color: #64e5c3; background: linear-gradient(100deg,rgba(80,217,179,.17),rgba(53,215,255,.06)); box-shadow: 0 0 24px rgba(80,217,179,.08); }
+.ops-suggested-path-toggle.active { border-color: #6ae3c0; background: linear-gradient(100deg,rgba(80,217,179,.18),rgba(53,215,255,.075)); box-shadow: inset 2px 0 #50d9b3,0 0 28px rgba(80,217,179,.1); }
+.ops-suggested-path-toggle span { min-width: 0; }
+.ops-suggested-path-toggle strong, .ops-suggested-path-toggle small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ops-suggested-path-toggle strong { color: #e1faf3; font-size: 10px; }
+.ops-suggested-path-toggle small { margin-top: 4px; color: #729d91; font-size: 7px; }
+.ops-suggested-path-toggle > b { padding: 4px 6px; border: 1px solid rgba(80,217,179,.26); border-radius: 4px; color: #72bdaa; font: 700 6px var(--font-geist-mono), monospace; letter-spacing: .08em; }
+.ops-suggested-path-toggle.active > b { color: #8df2d5; background: rgba(80,217,179,.08); }
 .ops-study-banner { display: flex; align-items: flex-start; gap: 8px; margin-top: 10px; padding: 8px; border-left: 2px solid #50d9b3; color: #50d9b3; background: rgba(80,217,179,.05); }
 .ops-study-banner span { min-width: 0; }
 .ops-study-banner strong, .ops-study-banner small { display: block; }
@@ -1156,4 +1165,35 @@ details li,
   .ml-tca-readout { grid-template-columns: 1fr 1fr; padding-top: 3px; }
   .ml-tca-readout button { grid-column: 1 / -1; justify-content: center; height: 34px; }
   .ml-scale-note { max-width: 70%; line-height: 1.35; }
+}
+
+@media (max-width: 480px) {
+  .ops-workspace { grid-template-rows: minmax(500px,68dvh) auto auto; }
+  .ops-globe-stage { min-height: 500px; }
+  .ops-analysis-rail { padding: 16px 10px 20px; }
+  .ops-fleet-list { grid-template-columns: 1fr; }
+  .ops-fleet-select { min-height: 58px; }
+  .ops-fleet-remove { width: 34px; min-height: 42px; }
+  .ops-globe-status { padding: 8px 9px; }
+  .ops-globe-status strong { font-size: 11px; }
+  .ops-globe-status small { font-size: 7px; }
+  .ops-event-orbit-legend { top: 82px; max-width: calc(100% - 16px); gap: 4px; padding: 6px 7px; font-size: 7px; }
+  .ops-event-orbit-legend i { width: 14px; }
+  .ops-globe-controls { gap: 5px; grid-template-columns: 38px minmax(0,1fr) 42px; padding: 6px; }
+  .ops-time-control > button, .ops-live-button { min-width: 38px; height: 40px; padding: 0; justify-content: center; }
+  .ops-time-control > span, .ops-live-button { font-size: 0; }
+  .ops-tca-button { height: 44px; padding: 0 8px; }
+  .ops-tca-button strong { font-size: 8px; }
+  .ops-tca-button small { font-size: 7px; }
+  .ops-encounter-overlay { bottom: 68px; width: calc(100% - 16px); padding: 9px; }
+  .ops-encounter-geometry { grid-template-columns: 1fr 88px 1fr; gap: 6px; }
+  .ops-avoidance-comparison small { line-height: 1.35; }
+  .ops-study-candidate-head { display: grid; }
+  .ops-study-candidate-head > b { text-align: left; }
+  .ops-study-metrics, .ops-study-checks, .ops-study-alternatives { grid-template-columns: 1fr; }
+  .ops-suggested-path-toggle { min-height: 58px; }
+  .ops-suggested-path-toggle > b { display: none; }
+  .ops-suggested-path-toggle strong, .ops-suggested-path-toggle small { white-space: normal; }
+  .ops-live-model-metrics { grid-template-columns: 1fr 1fr !important; }
+  .ops-live-model-evidence { grid-template-columns: 1fr !important; }
 }

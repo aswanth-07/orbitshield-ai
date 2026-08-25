@@ -5,6 +5,7 @@ import type { ConjunctionRecord, OmmRecord, OrbitPath } from './types';
 
 const STANDARD_GRAVITY = 9.80665;
 const SECONDS_PER_DAY = 86_400;
+const MAX_ADVISORY_DELTA_V_MPS = 0.25;
 
 export type RtnAxis = 'R' | 'T' | 'N';
 export type ManeuverDirection = '+R' | '-R' | '+T' | '-T' | '+N' | '-N';
@@ -30,6 +31,7 @@ export type ManeuverCandidate = {
   propellantGrams: number;
   burnDurationSeconds: number;
   efficiencyKmPerCentimeterSecond: number;
+  geometricExposureReductionPercent: number;
 };
 
 export type ManeuverStudy = {
@@ -102,7 +104,7 @@ function vectorCross(a: { x: number; y: number; z: number }, b: { x: number; y: 
   return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x };
 }
 
-export function sampleManeuverPath(
+export function sampleSgp4AnchoredManeuverPath(
   record: OmmRecord,
   candidate: ManeuverCandidate,
   start: Date,
@@ -151,8 +153,10 @@ export function sampleManeuverPath(
     });
   }
   if (points.length < 2) return null;
-  return { catalogId: -4, name: 'Advisory manoeuvre candidate', color, role: 'maneuver-study', points };
+  return { catalogId: -4, name: 'SGP4-anchored lowest-fuel path', color, role: 'maneuver-study', points };
 }
+
+export const sampleManeuverPath = sampleSgp4AnchoredManeuverPath;
 
 export function propellantForImpulse(massKg: number, deltaVMps: number, specificImpulseSeconds: number) {
   if (!finitePositive(massKg) || !finitePositive(deltaVMps) || !finitePositive(specificImpulseSeconds)) return null;
@@ -197,7 +201,7 @@ export function buildManeuverStudy({
     postManeuverProbability: null,
     probabilityStatus: 'Requires an operator CDM with covariance, hard-body radius and a full-catalogue rescreen.',
     assumptions,
-    method: 'Linearized Hill-Clohessy-Wiltshire relative motion for a small impulsive burn near a circular orbit. Separation is measured at the original source TCA and not at a recomputed closest approach, so an along-track candidate that mostly shifts arrival time can read as a larger gain than a re-screen would confirm. It excludes J2, drag, finite-burn attitude and mission constraints.',
+    method: 'SGP4 propagates the public OMM/TLE reference orbit. Linearized Hill-Clohessy-Wiltshire R-T-N relative motion then previews a small impulsive offset from that reference. The optimizer solves the exact minimum delta-v needed to reach the selected separation gain at the original source TCA, not a recomputed closest approach. It excludes covariance-backed probability, J2 beyond the reference elements, drag changes, finite-burn attitude and mission constraints.',
     requiredChecks: [
       'Replace public elements with an operator ephemeris and covariance-backed CDM.',
       'Verify thruster, attitude, payload and mission-timeline constraints.',
@@ -226,61 +230,70 @@ export function buildManeuverStudy({
   }
 
   const meanMotionRadS = meanMotionRevolutionsPerDay * Math.PI * 2 / SECONDS_PER_DAY;
-  const deltaVelocities = [0.01, 0.02, 0.03, 0.05, 0.08, 0.1];
+  const baseline = {
+    r: encounterDirection.r * event.rangeKm,
+    t: encounterDirection.t * event.rangeKm,
+    n: encounterDirection.n * event.rangeKm,
+  };
+  const baselineSquared = event.rangeKm * event.rangeKm;
+  const targetKm = event.rangeKm + assumptions.targetSeparationGainKm;
+  const targetSquared = targetKm * targetKm;
   const candidates: ManeuverCandidate[] = [];
   for (const leadHours of leadTimes) {
     const elapsedSeconds = leadHours * 3_600;
     for (const option of directions) {
-      for (const deltaVMps of deltaVelocities) {
-        const displacement = hcwImpulseDisplacement(meanMotionRadS, elapsedSeconds, [
-          option.vector[0] * deltaVMps,
-          option.vector[1] * deltaVMps,
-          option.vector[2] * deltaVMps,
-        ]);
-        if (!displacement) continue;
-        const displacementKm = {
-          r: displacement.radial / 1_000,
-          t: displacement.alongTrack / 1_000,
-          n: displacement.normal / 1_000,
-        };
-        const baseline = {
-          r: encounterDirection.r * event.rangeKm,
-          t: encounterDirection.t * event.rangeKm,
-          n: encounterDirection.n * event.rangeKm,
-        };
-        const separationAtSourceTcaKm = Math.hypot(
-          baseline.r - displacementKm.r,
-          baseline.t - displacementKm.t,
-          baseline.n - displacementKm.n,
-        );
-        const displacementAtTcaKm = Math.hypot(displacementKm.r, displacementKm.t, displacementKm.n);
-        const propellantKg = propellantForImpulse(assumptions.spacecraftMassKg, deltaVMps, assumptions.specificImpulseSeconds);
-        if (propellantKg === null) continue;
-        candidates.push({
-          id: `${leadHours}-${option.direction}-${deltaVMps}`,
-          direction: option.direction,
-          axis: option.axis,
-          directionLabel: option.label,
-          burnTime: new Date(tca - elapsedSeconds * 1_000).toISOString(),
-          leadHours,
-          deltaVMps,
-          displacementAtTcaKm,
-          separationAtSourceTcaKm,
-          separationGainAtSourceTcaKm: separationAtSourceTcaKm - event.rangeKm,
-          propellantGrams: propellantKg * 1_000,
-          burnDurationSeconds: assumptions.thrustNewtons > 0
-            ? propellantKg * assumptions.specificImpulseSeconds * STANDARD_GRAVITY / assumptions.thrustNewtons
-            : 0,
-          efficiencyKmPerCentimeterSecond: displacementAtTcaKm / (deltaVMps * 100),
-        });
-      }
+      const perUnit = hcwImpulseDisplacement(meanMotionRadS, elapsedSeconds, option.vector);
+      if (!perUnit) continue;
+      const perUnitKm = { r: perUnit.radial / 1_000, t: perUnit.alongTrack / 1_000, n: perUnit.normal / 1_000 };
+      const displacementSquared = perUnitKm.r ** 2 + perUnitKm.t ** 2 + perUnitKm.n ** 2;
+      if (!finitePositive(displacementSquared)) continue;
+      const projection = baseline.r * perUnitKm.r + baseline.t * perUnitKm.t + baseline.n * perUnitKm.n;
+      const discriminant = projection * projection + displacementSquared * (targetSquared - baselineSquared);
+      if (discriminant < 0) continue;
+      const deltaVMps = (projection + Math.sqrt(discriminant)) / displacementSquared;
+      if (!finitePositive(deltaVMps) || deltaVMps > MAX_ADVISORY_DELTA_V_MPS) continue;
+      const displacementKm = {
+        r: perUnitKm.r * deltaVMps,
+        t: perUnitKm.t * deltaVMps,
+        n: perUnitKm.n * deltaVMps,
+      };
+      const separationAtSourceTcaKm = Math.hypot(
+        baseline.r - displacementKm.r,
+        baseline.t - displacementKm.t,
+        baseline.n - displacementKm.n,
+      );
+      const displacementAtTcaKm = Math.hypot(displacementKm.r, displacementKm.t, displacementKm.n);
+      const propellantKg = propellantForImpulse(assumptions.spacecraftMassKg, deltaVMps, assumptions.specificImpulseSeconds);
+      if (propellantKg === null) continue;
+      candidates.push({
+        id: `${leadHours}-${option.direction}-${deltaVMps.toFixed(9)}`,
+        direction: option.direction,
+        axis: option.axis,
+        directionLabel: option.label,
+        burnTime: new Date(tca - elapsedSeconds * 1_000).toISOString(),
+        leadHours,
+        deltaVMps,
+        displacementAtTcaKm,
+        separationAtSourceTcaKm,
+        separationGainAtSourceTcaKm: separationAtSourceTcaKm - event.rangeKm,
+        propellantGrams: propellantKg * 1_000,
+        burnDurationSeconds: assumptions.thrustNewtons > 0
+          ? propellantKg * assumptions.specificImpulseSeconds * STANDARD_GRAVITY / assumptions.thrustNewtons
+          : 0,
+        efficiencyKmPerCentimeterSecond: displacementAtTcaKm / (deltaVMps * 100),
+        geometricExposureReductionPercent: clamp(
+          (1 - baselineSquared / (separationAtSourceTcaKm * separationAtSourceTcaKm)) * 100,
+          0,
+          99.9,
+        ),
+      });
     }
   }
 
-  const goalCandidates = candidates.filter((candidate) => candidate.separationGainAtSourceTcaKm >= assumptions.targetSeparationGainKm);
+  const goalCandidates = candidates.filter((candidate) => candidate.separationGainAtSourceTcaKm >= assumptions.targetSeparationGainKm - 1e-8);
   const ranked = [...goalCandidates].sort((first, second) => (
-    first.deltaVMps - second.deltaVMps
-    || second.separationGainAtSourceTcaKm - first.separationGainAtSourceTcaKm
+    first.propellantGrams - second.propellantGrams
+    || first.displacementAtTcaKm - second.displacementAtTcaKm
     || second.leadHours - first.leadHours
   ));
   const recommended = ranked[0] ?? null;
@@ -289,8 +302,8 @@ export function buildManeuverStudy({
     ...base,
     status: recommended ? 'ready' : 'insufficient-data',
     reason: recommended
-      ? `Minimum-impulse candidate that adds at least ${assumptions.targetSeparationGainKm.toFixed(1)} km of separation at the source TCA in the current public-element geometry.`
-      : `No tested small impulse reached the ${assumptions.targetSeparationGainKm.toFixed(1)} km separation-gain objective at the source TCA.`,
+      ? `Exact lowest-propellant candidate that adds ${assumptions.targetSeparationGainKm.toFixed(1)} km of separation at the source TCA while minimizing path movement in the current public-element geometry.`
+      : `No advisory impulse below ${MAX_ADVISORY_DELTA_V_MPS.toFixed(2)} m/s reached the ${assumptions.targetSeparationGainKm.toFixed(1)} km separation-gain objective at the source TCA.`,
     recommended,
     alternatives,
   };
@@ -311,8 +324,8 @@ export type LeadTimeCost = {
  * Minimum impulse that reaches the separation goal at each decision time.
  *
  * Separation at the source TCA is quadratic in the impulse magnitude along a
- * fixed direction, so the required delta-v has a closed form and does not need
- * the sampled sweep that `buildManeuverStudy` uses to rank candidates.
+ * fixed direction, so the required delta-v has a closed form matching the
+ * optimizer used by `buildManeuverStudy`.
  */
 export function leadTimeCostCurve({
   event,

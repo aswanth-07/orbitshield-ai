@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import fleetOrbitFixture from '../data/fleet-orbits.snapshot.json';
-import { buildManeuverStudy, hcwImpulseDisplacement, leadTimeCostCurve, propellantForImpulse, sampleManeuverPath } from './maneuver';
+import {
+  buildManeuverStudy, hcwImpulseDisplacement, leadTimeCostCurve,
+  propellantForImpulse, sampleSgp4AnchoredManeuverPath,
+} from './maneuver';
 import type { ConjunctionRecord, OmmRecord } from './types';
 
 const orbitFixture = fleetOrbitFixture as {
@@ -54,7 +57,7 @@ describe('manoeuvre scenario physics', () => {
       event: event(), protectedRecord: protectedRecord(), counterpartRecord: counterpartRecord(),
       now: new Date('2026-08-25T04:00:00Z').getTime(),
     });
-    const path = sampleManeuverPath(
+    const path = sampleSgp4AnchoredManeuverPath(
       protectedRecord(), study.recommended!,
       new Date('2026-08-26T07:18:58.249Z'), new Date(event().tca), '#50d9b3', 24,
     );
@@ -79,7 +82,8 @@ describe('manoeuvre scenario physics', () => {
     });
     expect(study.status).toBe('ready');
     expect(study.recommended).not.toBeNull();
-    expect(study.recommended!.separationGainAtSourceTcaKm).toBeGreaterThanOrEqual(2);
+    expect(study.recommended!.separationGainAtSourceTcaKm).toBeCloseTo(2, 7);
+    expect(study.recommended!.geometricExposureReductionPercent).toBeGreaterThan(0);
     expect(study.postManeuverProbability).toBeNull();
     expect(study.probabilityStatus).toContain('CDM');
   });
@@ -91,6 +95,7 @@ describe('manoeuvre scenario physics', () => {
       counterpartRecord: counterpartRecord(),
       now: new Date('2026-08-25T04:00:00Z').getTime(),
     });
+    expect(study.method).toContain('SGP4');
     expect(study.method).toContain('Hill-Clohessy-Wiltshire');
     expect(study.method).toContain('original source TCA');
     expect(study.requiredChecks.length).toBeGreaterThan(0);
@@ -127,7 +132,7 @@ describe('manoeuvre scenario physics', () => {
     expect(half!.deltaVMps / long!.deltaVMps).toBeLessThan(2.3);
   });
 
-  it('never asks for more impulse than the sampled sweep already found', () => {
+  it('uses the same exact minimum impulse as the decision-time cost curve', () => {
     const now = new Date('2026-08-25T04:00:00Z').getTime();
     const study = buildManeuverStudy({
       event: event(), protectedRecord: protectedRecord(), counterpartRecord: counterpartRecord(), now,
@@ -137,7 +142,7 @@ describe('manoeuvre scenario physics', () => {
     });
     const matching = curve.find((point) => point.leadHours === study.recommended!.leadHours);
     expect(matching).toBeDefined();
-    expect(matching!.deltaVMps).toBeLessThanOrEqual(study.recommended!.deltaVMps + 1e-9);
+    expect(matching!.deltaVMps).toBeCloseTo(study.recommended!.deltaVMps, 9);
   });
 
   it('does not create a late burn candidate inside six hours', () => {

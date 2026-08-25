@@ -63,16 +63,46 @@ export function sampleOrbitPath(
   color: string,
   samples = 180,
 ): OrbitPath {
+  return sampleClosedOrbitPath(record, center, color, samples);
+}
+
+/**
+ * Samples one complete SGP4 revolution in a fixed Earth frame.
+ *
+ * Satellite markers still use the date-specific Greenwich angle, so their
+ * displayed motion remains time-correct. Orbit wires use one fixed angle for
+ * the full revolution because they represent the orbital plane, not a drifting
+ * ground track. Repeating the first point makes the visual path explicitly
+ * closed for the globe renderer.
+ */
+export function sampleClosedOrbitPath(
+  record: OmmRecord,
+  center: Date,
+  color: string,
+  samples = 180,
+): OrbitPath {
   const prepared = prepareOmm(record);
   const meanMotion = Number(record.MEAN_MOTION);
   const periodMs = Number.isFinite(meanMotion) && meanMotion > 0 ? (86_400_000 / meanMotion) : 5_400_000;
   const start = center.getTime() - periodMs / 2;
-  const points = Array.from({ length: samples }, (_, index) => {
-    const date = new Date(start + (index / (samples - 1)) * periodMs);
-    return prepared ? propagatePreparedOmm(prepared, date) : null;
-  })
-    .filter((point): point is PropagatedObject => Boolean(point))
-    .map(({ lat, lng, altitude }) => ({ lat, lng, altitude }));
+  const sampleCount = Math.max(3, Math.floor(samples));
+  const uniquePointCount = sampleCount - 1;
+  const fixedGmst = gstime(center);
+  const points = Array.from({ length: uniquePointCount }, (_, index) => {
+    if (!prepared) return null;
+    const date = new Date(start + (index / uniquePointCount) * periodMs);
+    const state = propagate(prepared.satrec, date);
+    if (!state || !state.position || typeof state.position === 'boolean') return null;
+    const geodetic = eciToGeodetic(state.position, fixedGmst);
+    if (!Number.isFinite(geodetic.height)) return null;
+    return {
+      lat: degreesLat(geodetic.latitude),
+      lng: degreesLong(geodetic.longitude),
+      altitude: Math.max(0.003, geodetic.height / EARTH_RADIUS_KM),
+    };
+  }).filter((point): point is { lat: number; lng: number; altitude: number } => Boolean(point));
+
+  if (points.length) points.push({ ...points[0] });
 
   return {
     catalogId: catalogId(record),

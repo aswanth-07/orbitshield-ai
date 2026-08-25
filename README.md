@@ -7,7 +7,9 @@ The hackathon demonstration keeps two evidence lanes in one persistent product v
 - **Live two-day triage:** a 37-tree feed-compatible model scores current fleet events inside 48 hours and raises named, globe-mapped alerts. Its event-held-out test F2 is 0.631 and recall is 0.933.
 - **Professional model research:** five model families use the richer ESA CDM histories for the future operator-data tier. This benchmark remains technical evidence rather than the main judge workflow.
 
-The central globe opens on the monitored fleet and screened debris; the larger active catalogue is available from the optional Context control. A visible ESA CDM evidence card compares all five researched models and identifies the 76-feature professional-tier champion without mixing it into the live public alert source. Selecting a live ML alert starts the globe replay in one click. SGP4 propagates both objects across the final 20-minute approach, while a chase camera follows the protected satellite. The protected and counterpart paths remain distinct and a pulsing red target marks closest approach. All judge-facing absolute times, including TCA, are displayed in India Standard Time. SOCRATES values remain authoritative for source metrics.
+The central globe opens on eight monitored Earth-observation missions, including Landsat 9 and Sentinel-2C, plus screened debris; the larger active catalogue is available from the optional Context control. A visible ESA CDM evidence card compares all five researched models and identifies the 76-feature professional-tier champion without mixing it into the live public alert source. Selecting a live ML alert starts the globe replay in one click. SGP4 propagates both objects across the final 20-minute approach, while a chase camera follows the protected satellite. The protected and counterpart orbit wires are explicitly closed, their paths remain distinct, and a pulsing red target marks closest approach. All judge-facing absolute times, including TCA, are displayed in India Standard Time. SOCRATES values remain authoritative for source metrics.
+
+Elevated alerts also expose an advisory manoeuvre study. It solves the exact minimum impulsive delta-v needed to reach the selected separation-gain goal, ranks equivalent R-T-N directions by propellant and path displacement, and draws the chosen offset from the SGP4 reference trajectory. The preview uses linearized Hill-Clohessy-Wiltshire relative motion and reports a geometric exposure proxy only; a covariance-backed CDM, operator ephemeris, full-catalogue re-screen and mission approval are still required before operational use.
 
 ## Run locally
 
@@ -32,4 +34,4 @@ Train the five-model benchmark with:
 .\.venv-ml\Scripts\python.exe .\ml\benchmark_models.py
 ```
 
-The model output is a raw triage score, not collision probability. The current model accepts only complete events inside its trained 48-hour horizon and rescans the feed every minute. OrbitShield does not confirm collisions, recommend manoeuvres, or replace a qualified flight-dynamics analyst.
+The model output is a raw triage score, not collision probability. The current model accepts only complete events inside its trained 48-hour horizon and rescans the feed every minute. OrbitShield does not confirm collisions, command manoeuvres, or replace a qualified flight-dynamics analyst.

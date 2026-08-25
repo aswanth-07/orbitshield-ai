@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { propagateOmm, sampleOrbitSegment } from './orbit';
+import { propagateOmm, sampleClosedOrbitPath, sampleOrbitSegment } from './orbit';
 import type { OmmRecord } from './types';
 
 const record: OmmRecord = {
@@ -27,6 +27,15 @@ const record: OmmRecord = {
 };
 
 describe('future orbit segment sampling', () => {
+  it('builds an explicitly closed SGP4 orbit wire', () => {
+    const center = new Date('2026-03-26T10:53:58.905600Z');
+    const path = sampleClosedOrbitPath(record, center, '#35d7ff', 64);
+
+    expect(path.points).toHaveLength(64);
+    expect(path.points[0]).toEqual(path.points.at(-1));
+    expect(path.points.every((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))).toBe(true);
+  });
+
   it('starts at the displayed object time and ends exactly at TCA', () => {
     const start = new Date('2026-03-26T10:53:58.905600Z');
     const tca = new Date(start.getTime() + 20 * 60_000);

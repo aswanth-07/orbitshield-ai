@@ -279,7 +279,7 @@ export async function getConjunctions(): Promise<ConjunctionResponse> {
     if (!runResponse.ok) throw new Error(`SOCRATES run returned HTTP ${runResponse.status}`);
     const csv = await runResponse.text();
     const events = parseSocratesCsv(csv, new Date());
-    if (!events.length) throw new Error('SOCRATES run contained no usable India-fleet rows');
+    if (!events.length) throw new Error('SOCRATES run contained no usable monitored-fleet rows');
     const fallback = socratesSnapshot as SnapshotSocrates;
     const value: ConjunctionResponse = {
       status: 'current',
