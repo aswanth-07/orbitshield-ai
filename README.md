@@ -1,13 +1,13 @@
 # OrbitShield AI
 
-OrbitShield is an automated conjunction-monitoring workspace for small satellite teams. It watches a selected fleet, raises close-approach alerts from current public screening, explains the selected risk in plain language, and follows the protected satellite and debris to closest approach on a live 3D globe.
+OrbitShield is an ML conjunction-risk workspace for small satellite teams. Public screening identifies possible close approaches, compatible operator CDMs feed a trained Histogram Gradient Boosting model, and only an elevated model score becomes an analyst alert. The workspace explains the evidence and follows the protected satellite and counterpart to closest approach on a live 3D globe.
 
 The hackathon demonstration keeps two evidence lanes in one persistent product view:
 
-- **Automated public monitoring:** CelesTrak OMM context, SOCRATES metrics, transparent Review/Watch/Low alerts, and six India Earth Observation missions.
-- **CDM model evidence:** five event-held-out model families trained on ESA CDM histories. Histogram Gradient Boosting leads validation F2, while the interface states when a public event lacks the covariance history required for model inference.
+- **Public candidate intake:** CelesTrak OMM context, SOCRATES metrics, transparent Review/Watch/Low screening priorities, and six India Earth Observation missions. These rows are candidates, not ML alerts.
+- **ML risk prediction:** five event-held-out model families trained on ESA CDM histories. Histogram Gradient Boosting leads validation F2 and scores each compatible CDM sequence through the live endpoint. The alert rail is driven by this model result.
 
-The central globe opens on six solid green monitored orbits and screened debris; the larger active catalogue is available from the optional Context control. SGP4 propagation animates the orbital picture. The accelerated follow compresses a 20-minute encounter window into 6.5 seconds, renders the protected orbit as solid green, renders the counterpart orbit as a coloured dashed path, and circles the TCA closest-approach target in red before showing a labelled magnified schematic. SOCRATES values remain authoritative.
+The central globe opens on the monitored fleet and screened debris; the larger active catalogue is available from the optional Context control. SGP4 propagation animates the orbital picture. The accelerated follow compresses a 20-minute encounter window into 6.5 seconds, renders the protected path and dashed counterpart path, and circles the TCA closest-approach target in red before showing a labelled magnified schematic. All judge-facing absolute times, including TCA, are displayed in India Standard Time. SOCRATES values remain authoritative for public screening candidates.
 
 ## Run locally
 
@@ -32,4 +32,4 @@ Train the five-model benchmark with:
 .\.venv-ml\Scripts\python.exe .\ml\benchmark_models.py
 ```
 
-The model output is a raw triage score, not collision probability. OrbitShield raises prototype monitoring alerts and supports preliminary review. It does not confirm collisions, recommend manoeuvres, or replace a qualified flight-dynamics analyst.
+The model output is a raw triage score, not collision probability. OrbitShield raises an analyst alert when a compatible CDM sequence crosses the trained model threshold. An external CDM connector can include an absolute `tca` timestamp in `POST /api/model/live`; the interface normalizes and displays it in IST. The held-out ESA test feed has only a relative T− timeline because its absolute event time is anonymized. OrbitShield does not confirm collisions, recommend manoeuvres, or replace a qualified flight-dynamics analyst.

@@ -730,6 +730,17 @@ details li,
 .ops-alert-heading span { display: flex; align-items: center; gap: 6px; color: #cbd5d8; font: 700 9px var(--font-geist-mono), monospace; }
 .ops-alert-heading span svg { color: #f4b85a; }
 .ops-alert-heading b { color: #f4b85a; font: 600 7px var(--font-geist-mono), monospace; }
+.ops-alert-heading.model span svg { color: #ff6d70; }
+.ops-alert-heading.model b { color: #ff7e81; }
+.ops-alert-heading.candidates span svg, .ops-alert-heading.candidates b { color: #68bcd0; }
+.ops-ml-alert-slot { padding: 8px; border-bottom: 1px solid #20282d; background: #090d0f; }
+.ops-ml-alert-slot > button { width: 100%; min-height: 78px; display: grid; grid-template-columns: 27px minmax(0,1fr) 64px; align-items: start; gap: 8px; padding: 10px 8px; border: 1px solid rgba(255,109,112,.38); border-radius: 7px; background: linear-gradient(90deg,rgba(255,109,112,.09),rgba(255,109,112,.02)); color: #d4dde0; text-align: left; cursor: pointer; }
+.ops-ml-alert-slot > button:hover, .ops-ml-alert-slot > button.selected { border-color: #ff6d70; box-shadow: inset 2px 0 #ff6d70; }
+.ops-ml-alert-empty { min-height: 52px; display: flex; align-items: center; gap: 9px; padding: 9px; border: 1px solid #213036; border-radius: 7px; color: #50d9b3; background: rgba(80,217,179,.025); }
+.ops-ml-alert-empty span { min-width: 0; }
+.ops-ml-alert-empty strong, .ops-ml-alert-empty small { display: block; }
+.ops-ml-alert-empty strong { color: #aebdb9; font-size: 9px; }
+.ops-ml-alert-empty small { margin-top: 4px; color: #65747a; font-size: 8px; }
 .ops-alert-list { flex: 1; min-height: 0; padding: 8px; overflow: auto; }
 .ops-alert-list > button { width: 100%; min-height: 76px; display: grid; grid-template-columns: 27px minmax(0,1fr) 58px; align-items: start; gap: 8px; margin-bottom: 6px; padding: 10px 8px; border: 1px solid #1e272c; border-radius: 7px; background: #0d1113; color: #d4dde0; text-align: left; cursor: pointer; }
 .ops-alert-list > button:hover { border-color: #35444b; background: #11171a; }
@@ -863,6 +874,8 @@ details li,
 .ops-live-model-title > svg { color: #50d9b3; }
 .ops-cdm-definition { margin: 10px 0 0; padding: 8px; border-left: 2px solid #3a9db3; background: rgba(42,121,139,.06); color: #7f9096; font-size: 8px; line-height: 1.48; }
 .ops-cdm-definition b { color: #8ce4f5; font: 700 8px var(--font-geist-mono), monospace; }
+.ops-cdm-tca { margin: 7px 0 0; color: #718087; font-size: 7px; line-height: 1.45; }
+.ops-cdm-tca b { color: #a9bbc0; font: 700 7px var(--font-geist-mono), monospace; }
 .ops-live-model-intro { margin: 11px 0 0; color: #87959b; font-size: 9px; line-height: 1.5; }
 .ops-live-model-progress { height: 3px; margin-top: 11px; overflow: hidden; border-radius: 4px; background: #1d292e; }
 .ops-live-model-progress i { display: block; height: 100%; background: linear-gradient(90deg,#258ca7,#5de1f8); transition: width .35s ease; }

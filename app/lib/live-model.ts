@@ -50,6 +50,30 @@ export type LiveCdmInference = {
   riskTrendPerDay: number;
 };
 
+export type LiveModelFeed = {
+  eventId: number;
+  source: string;
+  mode: 'external-operator' | 'held-out-test-feed';
+  messagesReceived: number;
+  updatedAt: string;
+  tca: string | null;
+};
+
+export type LiveModelResponse = {
+  status: 'listening' | 'scored' | 'provisional';
+  feed: LiveModelFeed | null;
+  model: {
+    id: string;
+    name: string;
+    treeCount: number;
+    scoreThreshold?: number;
+    cutoffDays: number;
+    artifactSha256?: string;
+  };
+  inference?: LiveCdmInference;
+  warning?: string;
+};
+
 function numeric(message: LiveCdmMessage, key: string) {
   const value = message[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : Number.NaN;

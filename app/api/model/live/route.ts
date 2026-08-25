@@ -12,6 +12,7 @@ type LiveFeedState = {
   eventId: number;
   source: string;
   mode: FeedMode;
+  tca: string | null;
   messages: LiveCdmMessage[];
   updatedAt: string;
 };
@@ -48,6 +49,7 @@ function responseFor(state: LiveFeedState | undefined) {
       mode: state.mode,
       messagesReceived: state.messages.length,
       updatedAt: state.updatedAt,
+      tca: state.tca,
     },
     model: {
       id: model.id,
@@ -81,6 +83,7 @@ export async function POST(request: NextRequest) {
       eventId?: unknown;
       source?: unknown;
       mode?: unknown;
+      tca?: unknown;
       message?: unknown;
       reset?: unknown;
     };
@@ -96,10 +99,14 @@ export async function POST(request: NextRequest) {
     const messages = reset ? [] : existing.messages;
     if (messages.length >= 64) return NextResponse.json({ error: 'The live event already contains 64 messages.' }, { status: 409 });
     const mode: FeedMode = body.mode === 'held-out-test-feed' ? 'held-out-test-feed' : 'external-operator';
+    const parsedTca = typeof body.tca === 'string' && Number.isFinite(new Date(body.tca).getTime())
+      ? new Date(body.tca).toISOString()
+      : null;
     const next: LiveFeedState = {
       eventId: body.eventId,
       source: typeof body.source === 'string' ? body.source : 'Connected CDM provider',
       mode,
+      tca: parsedTca ?? (reset ? null : existing?.tca ?? null),
       messages: [...messages, body.message],
       updatedAt: new Date().toISOString(),
     };

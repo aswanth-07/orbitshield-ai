@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import streamFixture from '../../../data/live-cdm-stream.json';
 import { DELETE, GET, POST } from './route';
 
-function request(message: unknown, reset = false) {
+function request(message: unknown, reset = false, tca?: string) {
   return new NextRequest('http://localhost/api/model/live', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -12,6 +12,7 @@ function request(message: unknown, reset = false) {
       eventId: streamFixture.eventId,
       source: streamFixture.source,
       mode: 'held-out-test-feed',
+      tca,
       message,
       reset,
     }),
@@ -41,5 +42,11 @@ describe('/api/model/live', () => {
   it('rejects a message from inside the T-2 cutoff', async () => {
     const response = await POST(request({ ...streamFixture.messages[0], time_to_tca: 1.5 }, true));
     expect(response.status).toBe(422);
+  });
+
+  it('normalizes an absolute TCA for a connected feed', async () => {
+    const response = await POST(request(streamFixture.messages[0], true, '2026-08-27T09:05:00Z'));
+    const body = await response.json();
+    expect(body.feed.tca).toBe('2026-08-27T09:05:00.000Z');
   });
 });

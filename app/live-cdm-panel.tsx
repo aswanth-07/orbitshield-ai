@@ -4,7 +4,8 @@ import { CheckCircle2, Database, LockKeyhole, Play, Radio, RotateCcw, ShieldChec
 import { useEffect, useState } from 'react';
 
 import streamFixture from './data/live-cdm-stream.json';
-import type { LiveCdmInference, LiveCdmMessage } from './lib/live-model';
+import type { LiveCdmMessage, LiveModelResponse } from './lib/live-model';
+import { formatIst } from './lib/time';
 
 const stream = streamFixture as {
   eventId: number;
@@ -16,19 +17,6 @@ const stream = streamFixture as {
   recordedOutcome: LiveCdmMessage;
 };
 
-type ScoreResponse = {
-  status: 'listening' | 'scored' | 'provisional';
-  feed: null | {
-    eventId: number;
-    source: string;
-    mode: 'external-operator' | 'held-out-test-feed';
-    messagesReceived: number;
-    updatedAt: string;
-  };
-  model: { id: string; name: string; treeCount: number; scoreThreshold: number; cutoffDays: number };
-  inference?: LiveCdmInference;
-};
-
 function modelProbability(logRisk: number | null) {
   return logRisk === null ? 'Unavailable' : (10 ** logRisk).toExponential(3);
 }
@@ -37,7 +25,7 @@ export default function LiveCdmPanel({ compact = false }: { compact?: boolean })
   const [running, setRunning] = useState(false);
   const [nextTestIndex, setNextTestIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
-  const [result, setResult] = useState<ScoreResponse | null>(null);
+  const [result, setResult] = useState<LiveModelResponse | null>(null);
   const received = result?.feed?.messagesReceived ?? 0;
   const testFeed = result?.feed?.mode === 'held-out-test-feed';
   const externalFeed = result?.feed?.mode === 'external-operator';
@@ -50,7 +38,7 @@ export default function LiveCdmPanel({ compact = false }: { compact?: boolean })
     const refresh = async () => {
       try {
         const response = await fetch('/api/model/live', { cache: 'no-store' });
-        if (response.ok && active) setResult(await response.json() as ScoreResponse);
+        if (response.ok && active) setResult(await response.json() as LiveModelResponse);
       } catch {
         // Preserve the last live state during a temporary connector failure.
       }
@@ -83,7 +71,7 @@ export default function LiveCdmPanel({ compact = false }: { compact?: boolean })
           setRunning(false);
           return;
         }
-        setResult(await response.json() as ScoreResponse);
+        setResult(await response.json() as LiveModelResponse);
         setNextTestIndex((value) => value + 1);
       };
       void ingest();
@@ -106,7 +94,7 @@ export default function LiveCdmPanel({ compact = false }: { compact?: boolean })
 
   return <section className={`ops-live-model ${compact ? 'compact' : ''} ${running ? 'running' : completeScored || externalFeed ? 'complete' : 'idle'}`}>
     <div className="ops-live-model-head">
-      <span><Radio size={12} /> REAL-TIME CDM MODEL</span>
+      <span><Radio size={12} /> ML RISK PREDICTOR</span>
       <b>{badge}</b>
     </div>
     <div className="ops-live-model-title">
@@ -114,13 +102,18 @@ export default function LiveCdmPanel({ compact = false }: { compact?: boolean })
       <ShieldCheck size={18} />
     </div>
     <p className="ops-cdm-definition"><b>CDM</b> means Conjunction Data Message. It is a standard update for one predicted close approach containing TCA, miss distance, relative motion and the uncertainty of both orbits.</p>
+    {result?.feed && <p className="ops-cdm-tca"><b>TCA:</b> {result.feed.tca
+      ? formatIst(result.feed.tca, { seconds: true, year: true })
+      : testFeed
+        ? 'Relative T− timeline only. The ESA archive anonymizes the absolute event time.'
+        : 'Awaiting an absolute TCA from the connected CDM provider.'}</p>}
 
     {inference ? <>
       {testFeed && <div className="ops-live-model-progress"><i style={{ width: `${received / stream.messages.length * 100}%` }} /></div>}
       <div className="ops-live-model-metrics">
         <span><small>CDMs received</small><strong>{testFeed ? `${received}/${stream.messages.length}` : received}</strong></span>
         <span><small>Latest update</small><strong>T−{inference.latestTimeToTca.toFixed(2)}d</strong></span>
-        <span><small>Model score</small><strong>{inference.score.toFixed(3)}</strong></span>
+        <span><small>ML risk score</small><strong>{inference.score.toFixed(3)}</strong></span>
         <span><small>Feature coverage</small><strong>{(inference.inputCoverage * 100).toFixed(1)}%</strong></span>
       </div>
       <div className={`ops-live-model-decision ${inference.triage}`}>
@@ -139,6 +132,6 @@ export default function LiveCdmPanel({ compact = false }: { compact?: boolean })
       {completeScored && <button className="secondary" onClick={() => setRevealed((value) => !value)}><LockKeyhole size={12} />{revealed ? 'Hide outcome' : 'Reveal outcome'}</button>}
     </div>
     {completeScored && revealed && <div className="ops-live-model-outcome"><span>Recorded final message</span><strong>Pc {modelProbability(stream.recordedOutcome.risk)}</strong><small>The final event remained above the 10⁻⁶ review threshold.</small></div>}
-    <p className="ops-live-model-foot">Live ingestion endpoint · {result?.model.treeCount ?? 67} boosted trees · score is triage, not collision probability</p>
+    <p className="ops-live-model-foot">Each CDM reruns {result?.model.treeCount ?? 67} boosted trees · the ML score drives analyst alerts and is not collision probability</p>
   </section>;
 }

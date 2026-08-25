@@ -22,11 +22,11 @@ under `app/api` expose bootstrap, catalogue, conjunction, threat, and live-data
 responses. Each response labels its data as current, cached, or unavailable.
 
 `app/operations-workspace.tsx` owns the persistent three-part product view. The
-left rail derives monitored-satellite state and the automatic alert queue. The
-centre keeps the active catalogue, screened debris, monitored orbits and TCA
-replay in one WebGL scene. The right rail renders either a selected object's
-verified profile or the grounded alert explanation, metrics, model coverage and
-analyst workflow.
+left rail separates model-generated risk alerts from public screening
+candidates. The centre keeps the active catalogue, screened debris, monitored
+orbits and TCA replay in one WebGL scene. The right rail renders either a
+selected object's verified profile, a public candidate review, or the live
+model state.
 
 The replay clock writes verified SGP4 states to a shared frame reference. A
 WebGL animation loop moves only the selected pair and camera, so the monitoring
@@ -51,8 +51,8 @@ feed has no current TLE. SOCRATES records provide the displayed public
 conjunction metrics. Transparent rules
 assign Review, Watch, Low, or Needs data. Public geometry remains approximate,
 and the SOCRATES values remain authoritative for the event card. These rules
-raise the live close-approach alerts. They do not claim that the CDM model scored
-fields it did not receive.
+rank screening candidates. They never raise an ML alert or claim that the CDM
+model scored fields it did not receive.
 
 ## CDM intelligence lane
 
@@ -85,6 +85,10 @@ and exposes the latest state without caching. The dashboard polls this state
 every 1.5 seconds. `CDM_INGEST_TOKEN` can protect writes when configured. This
 in-memory channel supports the local hackathon demonstration; a production
 deployment replaces it with durable event storage or a direct provider query.
+An external connector may include an absolute `tca` value. The route normalizes
+it to ISO time, and every judge-facing absolute timestamp is formatted in India
+Standard Time. The ESA archive provides a relative T-minus timeline but no
+trustworthy absolute event time, so the test feed states that limit.
 
 The main workspace starts in a listening state. A connected operator feed is
 labelled `OPERATOR FEED`. When no external provider is configured, the judge can
@@ -112,8 +116,10 @@ source hash needed for deterministic inference.
 - `DataStatus`: `current`, `cached`, or `unavailable`.
 - `ScreeningPriority`: `review`, `watch`, `low`, or `needs-data`.
 - Public event metrics retain source timestamps and nullable source fields.
-- Public screening alerts and CDM model scores remain distinguishable in every
-  view.
+- Public screening candidates and CDM model alerts remain distinguishable in
+  every view.
+- Only an elevated CDM model score populates the ML risk alert queue.
+- Judge-facing absolute timestamps use India Standard Time.
 - Model results never overwrite SOCRATES fields or claim operational authority.
 - The T-2 cutoff and reserved-event identity travel with every replay result.
 - Live model input below the T-2 cutoff is rejected before feature generation.

@@ -6,10 +6,10 @@ status: active
 
 # OrbitShield
 
-OrbitShield is an offline-capable automated conjunction-monitoring prototype
+OrbitShield is an offline-capable ML conjunction-risk prototype
 for the Space Technology theme. The current build combines public CelesTrak
 screening, a persistent India Earth Observation fleet watch, SGP4 globe
-rendering, explainable risk alerts, accelerated satellite and debris encounters,
+rendering, model-generated risk alerts, accelerated satellite and debris encounters,
 and an ESA CDM model pipeline.
 
 ## Frozen decisions
@@ -20,11 +20,11 @@ and an ESA CDM model pipeline.
   held-out validation.
 - Event 9051 stays outside every training partition and supplies the judge
   replay.
-- OrbitShield raises prototype close-approach alerts for monitored satellites.
-  It does not issue certified collision warnings or manoeuvre instructions.
-- The primary demonstration stays in one monitoring workspace: fleet and alert
-  queue on the left, orbital picture in the centre, and risk analysis on the
-  right.
+- Public screening rows remain candidates. OrbitShield raises an analyst alert
+  only when a compatible CDM sequence crosses the trained model threshold.
+- The primary demonstration stays in one monitoring workspace: fleet, ML alert
+  and candidate queues on the left, orbital picture in the centre, and risk
+  analysis on the right.
 
 ## Pages
 

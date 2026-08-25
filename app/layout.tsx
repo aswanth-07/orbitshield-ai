@@ -21,15 +21,15 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     title: {
-      default: 'OrbitShield AI — Orbital Traffic Intelligence',
+      default: 'OrbitShield AI: Orbital Traffic Intelligence',
       template: '%s | OrbitShield AI',
     },
     description:
-      'Automated satellite monitoring, explainable conjunction alerts, and accelerated closest-approach visualization.',
+      'CDM-driven ML risk prediction, explainable analyst alerts, and accelerated closest-approach visualization.',
     openGraph: {
       type: 'website',
       title: 'OrbitShield AI',
-      description: 'Monitor selected satellites, prioritize conjunction alerts, and understand each risk on a live 3D globe.',
+      description: 'Monitor satellites, score conjunction CDMs with a trained model, and investigate elevated risks on a live 3D globe.',
       images: [{
         url: socialImage,
         width: 1200,
@@ -40,7 +40,7 @@ export async function generateMetadata(): Promise<Metadata> {
     twitter: {
       card: 'summary_large_image',
       title: 'OrbitShield AI',
-      description: 'Automated monitoring and explainable orbital risk alerts on a live 3D globe.',
+      description: 'ML conjunction risk prediction and explainable analyst alerts on a live 3D globe.',
       images: [socialImage],
     },
   };

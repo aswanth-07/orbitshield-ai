@@ -19,6 +19,8 @@ import { explainConjunction } from './lib/explanations';
 import { INDIA_EO_FLEET } from './lib/fleet';
 import { eventForSatellite, monitoredState, priorityReason } from './lib/monitoring';
 import { comparePriority, formatProbability } from './lib/screening';
+import type { LiveModelResponse } from './lib/live-model';
+import { formatIst } from './lib/time';
 import type { OrbitCameraMode } from './orbit-globe';
 import type {
   CatalogResponse, ConjunctionRecord, ConjunctionResponse, DataStatus, OmmRecord,
@@ -54,16 +56,6 @@ function statusTone(status?: DataStatus) {
 
 function cleanName(value: string) {
   return value.replace(/\s*\[[+?−-]\]\s*$/, '').trim();
-}
-
-function dateUtc(value: string | null | undefined, seconds = false) {
-  if (!value) return 'Unavailable';
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return value;
-  return `${date.toLocaleString('en-GB', {
-    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-    second: seconds ? '2-digit' : undefined, timeZone: 'UTC', hour12: false,
-  })} UTC`;
 }
 
 function countdown(tca: string, now: number) {
@@ -123,6 +115,7 @@ export default function OperationsWorkspace() {
   const [replaySpeed, setReplaySpeed] = useState(0);
   const [catalogueVisible, setCatalogueVisible] = useState(true);
   const [trajectoryStartTime, setTrajectoryStartTime] = useState<number | null>(null);
+  const [liveModel, setLiveModel] = useState<LiveModelResponse | null>(null);
   const simulationRef = useRef(0);
   const lastTick = useRef(0);
   const replayCancel = useRef<(() => void) | null>(null);
@@ -176,6 +169,21 @@ export default function OperationsWorkspace() {
     const interval = window.setInterval(() => void refreshLive(false), 5 * 60_000);
     return () => { active = false; window.clearInterval(interval); };
   }, [refreshLive]);
+
+  useEffect(() => {
+    let active = true;
+    const refreshModel = async () => {
+      try {
+        const response = await fetch('/api/model/live', { cache: 'no-store' });
+        if (response.ok && active) setLiveModel(await response.json() as LiveModelResponse);
+      } catch {
+        // Keep the last model state visible during a temporary connector failure.
+      }
+    };
+    void refreshModel();
+    const interval = window.setInterval(() => void refreshModel(), 1_500);
+    return () => { active = false; window.clearInterval(interval); };
+  }, []);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -367,7 +375,18 @@ export default function OperationsWorkspace() {
     setCameraResetKey((value) => value + 1);
   }
 
-  const alertCount = rankedEvents.filter((event) => event.priority === 'review' || event.priority === 'watch').length;
+  function focusMlRiskPredictor() {
+    cancelReplay();
+    setSelectedEventId(null);
+    setSelectedSatelliteId(null);
+    setTrajectoryStartTime(null);
+    setCameraMode('global');
+    setCameraResetKey((value) => value + 1);
+  }
+
+  const screeningCandidateCount = rankedEvents.filter((event) => event.priority === 'review' || event.priority === 'watch').length;
+  const mlAlert = liveModel?.inference?.triage === 'elevated' ? liveModel : null;
+  const mlAlertCount = mlAlert ? 1 : 0;
   const dataStatus = conjunctions?.status ?? catalog?.status;
   const namedEvents = rankedEvents.filter((event) => {
     const protectedId = chooseProtectedId(event);
@@ -380,11 +399,11 @@ export default function OperationsWorkspace() {
 
   return <main className="ops-shell">
     <header className="ops-header">
-      <div className="ops-brand"><span className="brand-glyph"><i /></span><div><strong>ORBITSHIELD</strong><small>Automated conjunction monitoring</small></div></div>
-      <div className="ops-automation"><Radar size={15} /><span><strong>MONITORING ACTIVE</strong><small>6 satellites · 5-minute refresh</small></span></div>
-      <div className="ops-header-summary"><span><b>{catalog?.count.toLocaleString() ?? 'N/A'}</b> active objects</span><i /><span><b>{threats?.positionedCount ?? 'N/A'}</b> risk objects mapped</span><i /><span><b>{alertCount}</b> alerts</span><i /><span><b>{modelBenchmark.models.length}</b> models tested</span></div>
+      <div className="ops-brand"><span className="brand-glyph"><i /></span><div><strong>ORBITSHIELD</strong><small>ML conjunction risk predictor</small></div></div>
+      <div className="ops-automation"><Radar size={15} /><span><strong>RISK PREDICTOR ACTIVE</strong><small>CDM-driven analyst triage</small></span></div>
+      <div className="ops-header-summary"><span><b>{catalog?.count.toLocaleString() ?? 'N/A'}</b> active objects</span><i /><span><b>{screeningCandidateCount}</b> candidates</span><i /><span><b>{mlAlertCount}</b> ML alerts</span><i /><span><b>{modelBenchmark.models.length}</b> models tested</span></div>
       <button className="ops-refresh" onClick={() => void refreshLive(true)} disabled={refreshing}><RefreshCw size={14} className={refreshing ? 'spinning' : ''} />{refreshing ? 'Refreshing' : 'Refresh'}</button>
-      <div className={`ops-feed-state ${statusTone(dataStatus)}`}><i /><span><b>{statusLabel(dataStatus)}</b><small>{lastRefresh ? dateUtc(new Date(lastRefresh).toISOString(), true) : 'Connecting'}</small></span></div>
+      <div className={`ops-feed-state ${statusTone(dataStatus)}`}><i /><span><b>{statusLabel(dataStatus)}</b><small>{lastRefresh ? formatIst(lastRefresh, { seconds: true }) : 'Connecting'}</small></span></div>
     </header>
 
     <section className="ops-workspace">
@@ -402,7 +421,16 @@ export default function OperationsWorkspace() {
           })}
         </div>
 
-        <div className="ops-alert-heading"><span><AlertTriangle size={13} /> ACTIVE RISK ALERTS</span><b>{alertCount} REQUIRE ATTENTION</b></div>
+        <div className="ops-alert-heading model"><span><AlertTriangle size={13} /> ML RISK ALERTS</span><b>{mlAlertCount ? 'MODEL ELEVATED' : 'NO ELEVATED SCORE'}</b></div>
+        <div className="ops-ml-alert-slot">
+          {mlAlert?.feed && mlAlert.inference ? <button className={!selectedEvent && !selectedRecord ? 'selected' : ''} onClick={focusMlRiskPredictor}>
+            <span className="ops-alert-severity review"><Bot size={14} /></span>
+            <span className="ops-alert-copy"><strong>{mlAlert.feed.mode === 'external-operator' ? `Operator event ${mlAlert.feed.eventId}` : `ESA test event ${mlAlert.feed.eventId}`}</strong><small>{mlAlert.feed.mode === 'external-operator' ? 'Connected operator CDM stream' : 'Held-out model demonstration'}</small><em>Model score {mlAlert.inference.score.toFixed(3)} crossed {mlAlert.inference.threshold.toFixed(2)}.</em></span>
+            <span className="ops-alert-metric"><b>T−{mlAlert.inference.latestTimeToTca.toFixed(2)}d</b><small>{mlAlert.feed.tca ? formatIst(mlAlert.feed.tca) : 'relative TCA'}</small></span>
+          </button> : <div className="ops-ml-alert-empty"><ShieldCheck size={14} /><span><strong>No elevated ML alert</strong><small>{liveModel?.inference ? 'Latest CDM sequence scored routine.' : 'Waiting for a compatible CDM sequence.'}</small></span></div>}
+        </div>
+
+        <div className="ops-alert-heading candidates"><span><Database size={13} /> PUBLIC SCREENING CANDIDATES</span><b>{screeningCandidateCount} WATCH OR REVIEW</b></div>
         <div className="ops-alert-list">
           {monitoredEvents.map((event) => {
             const protectedId = chooseProtectedId(event);
@@ -415,7 +443,7 @@ export default function OperationsWorkspace() {
             </button>;
           })}
         </div>
-        <div className="ops-rail-footer"><CircleDot size={12} /><span><strong>Automatic screening is running</strong><small>New source runs are ranked against the monitored fleet. Missing fields never receive an invented score.</small></span></div>
+        <div className="ops-rail-footer"><CircleDot size={12} /><span><strong>Candidate intake is running</strong><small>SOCRATES finds possible approaches. Only the trained CDM model can raise an ML risk alert.</small></span></div>
       </aside>
 
       <section className="ops-globe-stage">
@@ -444,24 +472,24 @@ export default function OperationsWorkspace() {
         <div className="ops-globe-status">
           <span><i /> LIVE ORBITAL PICTURE</span>
           <strong>{selectedEvent ? `${cleanName(selectedEvent.primaryName)} ↔ ${cleanName(selectedEvent.secondaryName)}` : selectedObjectName ?? 'Fleet overview'}</strong>
-          <small>{selectedEvent ? `${priorityLabels[selectedEvent.priority]} alert · ${replayActive ? countdown(selectedEvent.tca, simulationTime) : 'propagated final 20-minute approach'}` : selectedRecord ? `${fleetIds.includes(Number(selectedRecord.NORAD_CAT_ID)) ? 'Monitored' : 'Catalogue'} satellite · NORAD ${selectedRecord.NORAD_CAT_ID}` : 'Select any satellite or alert'}</small>
+          <small>{selectedEvent ? `${priorityLabels[selectedEvent.priority]} screening candidate · TCA ${formatIst(selectedEvent.tca, { seconds: true })}` : selectedRecord ? `${fleetIds.includes(Number(selectedRecord.NORAD_CAT_ID)) ? 'Monitored' : 'Catalogue'} satellite · NORAD ${selectedRecord.NORAD_CAT_ID}` : 'Select a satellite, screening candidate or ML alert'}</small>
         </div>
         <div className="ops-layer-legend"><span><i className="catalog" /> Catalogue satellites</span><span><i className="sat" /> Monitored satellites</span><span><i className="debris" /> Screened debris</span><span><i className="orbit" /> Monitored orbits</span></div>
         {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected approach to TCA</span><span><i className="counterpart" /> Counterpart approach to TCA</span><span><i className="tca-target" /> Closest approach</span></div>}
         {selectedEvent && selectedProtectedId && replayPhase === 'encounter' && <EncounterOverlay event={selectedEvent} protectedId={selectedProtectedId} threat={selectedThreat} />}
         <div className="ops-globe-controls">
-          <div className="ops-time-control"><button onClick={() => { cancelReplay(); setPlaying((value) => !value); }} aria-label={playing ? 'Pause orbital animation' : 'Play orbital animation'}>{playing ? <Pause size={14} /> : <Play size={14} />}</button><select value={speed} onChange={(event) => setSpeed(Number(event.target.value))} aria-label="Orbital animation speed"><option value={1}>1×</option><option value={10}>10×</option><option value={60}>60×</option></select><span>{dateUtc(new Date(simulationTime).toISOString(), true)}</span></div>
+          <div className="ops-time-control"><button onClick={() => { cancelReplay(); setPlaying((value) => !value); }} aria-label={playing ? 'Pause orbital animation' : 'Play orbital animation'}>{playing ? <Pause size={14} /> : <Play size={14} />}</button><select value={speed} onChange={(event) => setSpeed(Number(event.target.value))} aria-label="Orbital animation speed"><option value={1}>1×</option><option value={10}>10×</option><option value={60}>60×</option></select><span>{formatIst(simulationTime, { seconds: true })}</span></div>
           <div className="ops-camera-control"><button className={cameraMode === 'global' ? 'active' : ''} onClick={() => { setCameraMode('global'); setCameraResetKey((value) => value + 1); }}><RotateCcw size={13} /> Globe</button><button className={cameraMode === 'follow' || cameraMode === 'pair-follow' ? 'active' : ''} onClick={() => { setCameraMode(selectedEvent ? 'pair-follow' : 'follow'); setCameraResetKey((value) => value + 1); }} disabled={!selectedSatelliteId}><LocateFixed size={13} /> Track</button><button className={cameraMode === 'free' ? 'active' : ''} onClick={() => { setCameraMode('free'); setCameraResetKey((value) => value + 1); }}><Eye size={13} /> Free 3D</button><button className={catalogueVisible ? 'active' : ''} onClick={() => setCatalogueVisible((value) => !value)}><CircleDot size={13} /> Context</button></div>
-          <button className="ops-tca-button" onClick={runTcaReplay} disabled={!selectedEvent || replayActive}><Crosshair size={15} /><span><strong>{replayActive ? `${replayPhase === 'follow' ? 'Following satellite' : replayPhase === 'acquire' ? 'Acquiring debris' : 'At closest approach'}` : 'Follow alert to TCA'}</strong><small>{replayActive ? `≈ ${Math.round(replaySpeed)}× accelerated` : '20 minutes in 6.5 seconds'}</small></span></button>
+          <button className="ops-tca-button" onClick={runTcaReplay} disabled={!selectedEvent || replayActive}><Crosshair size={15} /><span><strong>{replayActive ? `${replayPhase === 'follow' ? 'Following satellite' : replayPhase === 'acquire' ? 'Acquiring debris' : 'At closest approach'}` : 'Follow candidate to TCA'}</strong><small>{replayActive ? `≈ ${Math.round(replaySpeed)}× accelerated` : '20 minutes in 6.5 seconds'}</small></span></button>
           <button className="ops-live-button" onClick={returnLive}><Clock3 size={13} /> Now</button>
         </div>
       </section>
 
       <aside className="ops-analysis-rail">
-        <div className="ops-analysis-heading"><div><span><Sparkles size={13} /> ORBITSHIELD ANALYST</span><strong>{selectedEvent ? 'Risk analysis' : selectedRecord ? 'Object profile' : 'Risk analysis'}</strong></div><b>{selectedEvent ? <><Bot size={14} /> AUTOMATED</> : selectedRecord ? <><Database size={14} /> CATALOGUE</> : <><Radar size={14} /> MONITORING</>}</b></div>
+        <div className="ops-analysis-heading"><div><span><Sparkles size={13} /> ORBITSHIELD ANALYST</span><strong>{selectedEvent ? 'Screening review' : selectedRecord ? 'Object profile' : 'ML risk predictor'}</strong></div><b>{selectedEvent ? <><Database size={14} /> PUBLIC DATA</> : selectedRecord ? <><Database size={14} /> CATALOGUE</> : <><Bot size={14} /> MODEL</>}</b></div>
         {selectedEvent && explanation && selectedCounterpart ? <>
           <section className={`ops-current-alert ${selectedEvent.priority}`}>
-            <div><span><TriangleAlert size={13} /> AI-ASSISTED ALERT</span><b className={selectedEvent.priority}>{priorityLabels[selectedEvent.priority]}</b></div>
+            <div><span><TriangleAlert size={13} /> SCREENING CANDIDATE</span><b className={selectedEvent.priority}>{priorityLabels[selectedEvent.priority]}</b></div>
             <strong>{cleanName(selectedEvent.primaryCatalogId === selectedProtectedId ? selectedEvent.primaryName : selectedEvent.secondaryName)}</strong>
             <small>Possible conjunction with {cleanName(selectedCounterpart.name)} · NORAD {selectedCounterpart.id}</small>
           </section>
@@ -473,7 +501,7 @@ export default function OperationsWorkspace() {
           </section>
 
           <section className="ops-risk-metrics">
-            <div><span>Closest approach</span><strong>{countdown(selectedEvent.tca, simulationTime)}</strong><small>{dateUtc(selectedEvent.tca)}</small></div>
+            <div><span>TCA in IST</span><strong>{formatIst(selectedEvent.tca, { seconds: true, year: true })}</strong><small>{countdown(selectedEvent.tca, simulationTime)} from simulation time</small></div>
             <div><span>Miss range</span><strong>{metric(selectedEvent.rangeKm, 'km', 3)}</strong><small>SOCRATES reported</small></div>
             <div><span>Relative speed</span><strong>{metric(selectedEvent.relativeSpeedKmS, 'km/s', 3)}</strong><small>At TCA</small></div>
             <div><span>Maximum Pc</span><strong>{formatProbability(selectedEvent.maximumProbability)}</strong><small>Screening estimate</small></div>
@@ -482,7 +510,7 @@ export default function OperationsWorkspace() {
           <section className="ops-model-state">
             <div className="ops-section-label"><span>MODEL COVERAGE</span><b className={publicEventModelReady ? 'ready' : 'waiting'}>{publicEventModelReady ? 'SCORING' : 'AWAITING CDM'}</b></div>
             <div className="ops-model-flow"><span className="done"><CheckCircle2 size={13} /> Live screening</span><i /><span className="done"><CheckCircle2 size={13} /> Alert explanation</span><i /><span><Database size={13} /> CDM triage</span></div>
-            <p>The close-approach alert is automatic. Five trained T−2 models activate when an operator CDM history supplies covariance and uncertainty fields.</p>
+            <p>This public row is a screening candidate, not a model alert. When an operator CDM history supplies geometry, covariance and uncertainty fields, the trained T−2 predictor scores it and raises an alert only if the model threshold is crossed.</p>
             <details><summary>View five-model benchmark <ChevronDown size={13} /></summary><div className="ops-benchmark-list">{modelBenchmark.models.map((model) => <div key={model.id} className={model.id === modelBenchmark.championModelId ? 'champion' : ''}><span><strong>{model.name}</strong><small>{model.family}</small></span><b>{model.validation.f2.toFixed(3)}<small>VAL F2</small></b><b>{model.test.pr_auc.toFixed(3)}<small>TEST PR-AUC</small></b></div>)}</div><div className="ops-model-proof"><span><b>{modelBenchmark.persistenceBaseline.f2.toFixed(3)}</b> persistence F2</span><span><b>{benchmarkChampion.validation.f2.toFixed(3)}</b> champion validation F2</span><span><b>{modelBenchmark.dataset.eventsTest.toLocaleString()}</b> test events</span></div><p>{modelBenchmark.championModelName} leads validation F2. These results validate the CDM triage pipeline and are not a score for this public SOCRATES event.</p></details>
             <LiveCdmPanel compact />
           </section>
@@ -493,7 +521,7 @@ export default function OperationsWorkspace() {
             <ol>{explanation.recommendedSteps.map((step, index) => <li key={step}><b>{String(index + 1).padStart(2, '0')}</b><span>{step}</span></li>)}</ol>
           </section>
 
-          <button className="ops-primary-action" onClick={runTcaReplay} disabled={replayActive}><Crosshair size={16} /><span><strong>{replayActive ? 'Following the encounter' : 'Visualize this alert'}</strong><small>{replayActive ? `Replay running at about ${Math.round(replaySpeed)}×` : 'Track the satellite and debris to TCA'}</small></span></button>
+          <button className="ops-primary-action" onClick={runTcaReplay} disabled={replayActive}><Crosshair size={16} /><span><strong>{replayActive ? 'Following the encounter' : 'Visualize this candidate'}</strong><small>{replayActive ? `Replay running at about ${Math.round(replaySpeed)}×` : `Track both objects to ${formatIst(selectedEvent.tca, { seconds: true })}`}</small></span></button>
           <p className="ops-safety-note"><ShieldCheck size={13} /> OrbitShield recommends review steps, never manoeuvres. Qualified mission personnel retain every operational decision.</p>
         </> : selectedRecord && selectedSatelliteId ? <div className="ops-object-profile">
           <section className="ops-object-identity">
@@ -510,13 +538,13 @@ export default function OperationsWorkspace() {
             <div><span>Launch date</span><strong>{selectedRecord.LAUNCH_DATE || 'Unavailable'}</strong></div>
             <div><span>Inclination</span><strong>{Number.isFinite(Number(selectedRecord.INCLINATION)) ? `${Number(selectedRecord.INCLINATION).toFixed(2)}°` : 'Unavailable'}</strong></div>
             <div><span>Orbit period</span><strong>{Number(selectedRecord.MEAN_MOTION) > 0 ? `${(1_440 / Number(selectedRecord.MEAN_MOTION)).toFixed(1)} min` : 'Unavailable'}</strong></div>
-            <div><span>Known alerts</span><strong>{selectedObjectEvents.length}</strong></div>
+            <div><span>Screening candidates</span><strong>{selectedObjectEvents.length}</strong></div>
           </section>
           <section className="ops-object-source">
             <div className="ops-section-label"><span>ORBIT RECORD</span><b><ShieldCheck size={11} /> VERIFIED FIELDS</b></div>
-            <p>Element epoch: {dateUtc(selectedRecord.EPOCH, true)}. Position and orbit are propagated from this public {selectedRecord.TLE_LINE1 ? 'TLE' : 'OMM'} record using SGP4. Source: {selectedRecord.ORBIT_SOURCE ?? catalog?.source ?? 'public GP catalogue'}.</p>
+            <p>Element epoch: {formatIst(selectedRecord.EPOCH, { seconds: true, year: true })}. Position and orbit are propagated from this public {selectedRecord.TLE_LINE1 ? 'TLE' : 'OMM'} record using SGP4. Source: {selectedRecord.ORBIT_SOURCE ?? catalog?.source ?? 'public GP catalogue'}.</p>
           </section>
-        </div> : <div className="ops-no-alert ops-monitoring-overview"><Radar size={25} /><strong>Fleet monitoring is active</strong><p>Blue satellites belong to the monitored India fleet. Green satellites provide public catalogue context. Select any satellite for its profile or choose an alert for risk analysis.</p><div><span><b>{fleetIds.length}</b> monitored satellites</span><span><b>{alertCount}</b> watch or review alerts</span><span><b>{threats?.positionedCount ?? 0}</b> risk objects mapped</span></div><LiveCdmPanel /></div>}
+        </div> : <div className="ops-no-alert ops-monitoring-overview"><Radar size={25} /><strong>ML risk prediction is active</strong><p>Public screening supplies possible conjunctions. Compatible operator CDMs feed the trained model, and only an elevated model score becomes an analyst alert.</p><div><span><b>{fleetIds.length}</b> monitored satellites</span><span><b>{screeningCandidateCount}</b> screening candidates</span><span><b>{mlAlertCount}</b> ML risk alerts</span></div><LiveCdmPanel /></div>}
       </aside>
     </section>
   </main>;

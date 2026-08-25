@@ -1,4 +1,5 @@
 import type { ConjunctionRecord, EventExplanation } from './types';
+import { formatIst } from './time';
 
 function probabilityPhrase(event: ConjunctionRecord) {
   if (event.maximumProbability === null) return 'a usable maximum-probability estimate is not available';
@@ -7,11 +8,7 @@ function probabilityPhrase(event: ConjunctionRecord) {
 
 export function explainConjunction(event: ConjunctionRecord): EventExplanation {
   const range = event.rangeKm === null ? 'an unavailable minimum range' : `approximately ${event.rangeKm.toFixed(2)} kilometres`;
-  const tca = new Date(event.tca).toLocaleString('en-GB', {
-    dateStyle: 'medium',
-    timeStyle: 'medium',
-    timeZone: 'UTC',
-  });
+  const tca = formatIst(event.tca, { seconds: true, year: true });
   const topReason = event.reasons[0] ?? 'the source record requires further review';
 
   const recommendedSteps =
@@ -22,7 +19,7 @@ export function explainConjunction(event: ConjunctionRecord): EventExplanation {
         : ['Keep the event in the watchlist.', 'Review it again when the source data refreshes.'];
 
   return {
-    whatIsHappening: `${event.primaryName} and ${event.secondaryName} are screened to pass within ${range} at ${tca} UTC.`,
+    whatIsHappening: `${event.primaryName} and ${event.secondaryName} are screened to pass within ${range} at ${tca}.`,
     whyPrioritized: `${topReason} In the same record, ${probabilityPhrase(event)}.`,
     recommendedSteps,
     limitation: 'This is public screening intelligence, not a confirmed collision, operational warning or autonomous manoeuvre instruction.',
