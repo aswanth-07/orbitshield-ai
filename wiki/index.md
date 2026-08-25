@@ -33,4 +33,6 @@ and an ESA CDM model pipeline.
   behavior.
 - `model-benchmark.md`: literature basis, five trained models, metrics and
   selection policy.
+- `real-world-case.md`: current satellite and debris facts, ISRO operations,
+  fuel economics, orbit congestion, product pitch, and model explanation.
 - `verification.md`: supported runtimes and checks for each change class.
