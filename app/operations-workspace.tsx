@@ -2,14 +2,13 @@
 
 import dynamic from 'next/dynamic';
 import {
-  Activity, AlertTriangle, Bot, CheckCircle2, ChevronDown, CircleDot, Clock3,
-  Crosshair, Database, Eye, LocateFixed, Maximize2, Minimize2, Pause, Play, Radar, RefreshCw,
+  Activity, AlertTriangle, Bot, CheckCircle2, CircleDot, Clock3,
+  Crosshair, Database, Eye, LocateFixed, Pause, Play, Radar,
   RotateCcw, Satellite, ShieldCheck, Sparkles, TriangleAlert,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import fleetOrbitFixture from './data/fleet-orbits.snapshot.json';
-import benchmarkFixture from './data/model-benchmark.json';
 import {
   animateTcaReplay, isSatelliteObjectType,
   TCA_REPLAY_DURATION_MS, tcaReplayStart, type TcaReplayFrame, type TcaReplayPhase,
@@ -22,8 +21,8 @@ import { comparePriority, formatProbability } from './lib/screening';
 import { advanceSimulationTime, formatIst } from './lib/time';
 import type { OrbitCameraMode } from './orbit-globe';
 import type {
-  CatalogResponse, ConjunctionRecord, ConjunctionResponse, DataStatus, OmmRecord,
-  ModelBenchmark, ScreeningPriority, ThreatObject, ThreatResponse,
+  CatalogResponse, ConjunctionRecord, ConjunctionResponse, OmmRecord,
+  ScreeningPriority, ThreatObject, ThreatResponse,
 } from './lib/types';
 
 const OrbitGlobe = dynamic(() => import('./orbit-globe'), {
@@ -36,23 +35,10 @@ const fleetOrbitSnapshot = fleetOrbitFixture as {
   elementSource: string;
   objects: Array<{ catalogId: number; epoch: string; tleLine1: string; tleLine2: string }>;
 };
-const modelBenchmark = benchmarkFixture as ModelBenchmark;
-const benchmarkChampion = modelBenchmark.models.find((model) => model.id === modelBenchmark.championModelId)!;
-const benchmarkMaxTestF2 = Math.max(...modelBenchmark.models.map((model) => model.test.f2));
 const fleetIds = INDIA_EO_FLEET.objects.map((item) => item.catalogId);
 const priorityLabels: Record<ScreeningPriority, string> = {
   review: 'Review', watch: 'Watch', low: 'Low', 'needs-data': 'Needs data',
 };
-
-function statusLabel(status?: DataStatus) {
-  if (status === 'current') return 'Live';
-  if (status === 'cached') return 'Cached';
-  return 'Unavailable';
-}
-
-function statusTone(status?: DataStatus) {
-  return status === 'current' ? 'current' : status === 'cached' ? 'cached' : 'unavailable';
-}
 
 function cleanName(value: string) {
   return value.replace(/\s*\[[+?−-]\]\s*$/, '').trim();
@@ -70,6 +56,14 @@ function countdown(tca: string, now: number) {
 
 function metric(value: number | null, unit: string, digits = 2) {
   return value === null || !Number.isFinite(value) ? 'Unavailable' : `${value.toFixed(digits)} ${unit}`;
+}
+
+function probabilityPercent(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return 'Unavailable';
+  const percent = value * 100;
+  if (percent >= 1) return `${percent.toFixed(2)}%`;
+  if (percent >= 0.01) return `${percent.toFixed(3)}%`;
+  return `${percent.toFixed(6)}%`;
 }
 
 function counterpartFor(event: ConjunctionRecord, protectedId: number) {
@@ -95,30 +89,15 @@ function EncounterOverlay({ event, protectedId, threat }: {
   </div>;
 }
 
-function EsaModelEvidence({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  return <aside className={`ops-esa-model-evidence ${open ? 'open' : 'collapsed'}`} aria-label="ESA CDM model evidence">
-    <button className="ops-esa-model-head" onClick={onToggle} aria-expanded={open}>
-      <span><Bot size={13} /><i><strong>ESA CDM MODEL</strong><small>Professional intelligence tier</small></i></span>
-      <b>{open ? <Minimize2 size={12} /> : <Maximize2 size={12} />}</b>
-    </button>
-    {open && <>
-      <div className="ops-esa-champion">
-        <span><small>Selected champion</small><strong>{benchmarkChampion.name}</strong></span>
-        <b>{benchmarkChampion.test.f2.toFixed(3)}<small>TEST F2</small></b>
-      </div>
-      <div className="ops-esa-proof-grid">
-        <span><b>{modelBenchmark.dataset.featureCount}</b><small>CDM features</small></span>
-        <span><b>{benchmarkChampion.test.recall.toFixed(3)}</b><small>Test recall</small></span>
-        <span><b>{modelBenchmark.dataset.eventsTest.toLocaleString()}</b><small>Held-out events</small></span>
-      </div>
-      <div className="ops-esa-model-flow"><span>CDM sequence</span><i>→</i><span>76 features</span><i>→</i><span>HGB triage</span></div>
-      <div className="ops-esa-model-bars">
-        {modelBenchmark.models.map((model) => <div key={model.id} className={model.id === modelBenchmark.championModelId ? 'champion' : ''}>
-          <span>{model.name}</span><i><b style={{ width: `${(model.test.f2 / benchmarkMaxTestF2) * 100}%` }} /></i><em>{model.test.f2.toFixed(3)}</em>
-        </div>)}
-      </div>
-      <p>Trained on ESA conjunction messages with covariance and uncertainty fields. It becomes the deeper inference tier when an operator connects compatible CDMs.</p>
-    </>}
+function CurrentModelCard() {
+  return <aside className="ops-current-model-card" aria-label="Current live model">
+    <div><Bot size={14} /><span><strong>CURRENT LIVE MODEL</strong><small>Two-day Public Feed HGB</small></span></div>
+    <p>Scores monitored conjunctions inside the next 48 hours.</p>
+    <dl>
+      <div><dt>Trees</dt><dd>{PUBLIC_TRIAGE_MODEL.trees.length}</dd></div>
+      <div><dt>Inputs</dt><dd>{PUBLIC_TRIAGE_MODEL.featureNames.length}</dd></div>
+      <div><dt>Threshold</dt><dd>{PUBLIC_TRIAGE_MODEL.scoreThreshold.toFixed(2)}</dd></div>
+    </dl>
   </aside>;
 }
 
@@ -134,15 +113,12 @@ export default function OperationsWorkspace() {
   const [playing, setPlaying] = useState(true);
   const [cameraMode, setCameraMode] = useState<OrbitCameraMode>('global');
   const [cameraResetKey, setCameraResetKey] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState(0);
   const [replayActive, setReplayActive] = useState(false);
   const [replayPhase, setReplayPhase] = useState<TcaReplayPhase | null>(null);
   const [replaySpeed, setReplaySpeed] = useState(0);
   const [catalogueVisible, setCatalogueVisible] = useState(true);
   const [trajectoryStartTime, setTrajectoryStartTime] = useState<number | null>(null);
   const [selectedMlAlertId, setSelectedMlAlertId] = useState<string | null>(null);
-  const [esaEvidenceOpen, setEsaEvidenceOpen] = useState(true);
   const [pendingGlobeReplayId, setPendingGlobeReplayId] = useState<string | null>(null);
   const simulationRef = useRef(0);
   const lastTick = useRef(0);
@@ -161,8 +137,7 @@ export default function OperationsWorkspace() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  const refreshLive = useCallback(async (showSpinner = true) => {
-    if (showSpinner) setRefreshing(true);
+  const refreshLive = useCallback(async () => {
     try {
       const response = await fetch('/api/live').then((result) => result.json() as Promise<{
         conjunctions: ConjunctionResponse;
@@ -171,11 +146,8 @@ export default function OperationsWorkspace() {
       }>);
       setConjunctions(response.conjunctions);
       setThreats(response.threats);
-      setLastRefresh(new Date(response.refreshedAt).getTime());
     } catch {
       // Keep the last current or cached monitoring snapshot available.
-    } finally {
-      if (showSpinner) setRefreshing(false);
     }
   }, []);
 
@@ -191,10 +163,9 @@ export default function OperationsWorkspace() {
         if (!active) return;
         setConjunctions(result.conjunctions);
         setThreats(result.threats);
-        setLastRefresh(new Date(result.refreshedAt).getTime());
       })
-      .finally(() => { if (active) void refreshLive(false); });
-    const interval = window.setInterval(() => void refreshLive(false), 5 * 60_000);
+      .finally(() => { if (active) void refreshLive(); });
+    const interval = window.setInterval(() => void refreshLive(), 5 * 60_000);
     return () => { active = false; window.clearInterval(interval); };
   }, [refreshLive]);
 
@@ -407,7 +378,6 @@ export default function OperationsWorkspace() {
   }
 
   const screeningCandidateCount = rankedEvents.filter((event) => event.priority === 'review' || event.priority === 'watch').length;
-  const dataStatus = conjunctions?.status ?? catalog?.status;
   const namedEvents = rankedEvents.filter((event) => {
     const protectedId = chooseProtectedId(event);
     const counterpart = counterpartFor(event, protectedId);
@@ -422,24 +392,29 @@ export default function OperationsWorkspace() {
     if (!recordMap.has(event.primaryCatalogId) || !recordMap.has(event.secondaryCatalogId)) return [];
     if (/^UNKNOWN\b/i.test(cleanName(event.primaryName)) || /^UNKNOWN\b/i.test(cleanName(event.secondaryName))) return [];
     return [result];
-  }).sort((first, second) => second.score - first.score || first.hoursToTca - second.hoursToTca), [rankedEvents, recordMap, triageMinute]);
+  }).sort((first, second) => {
+    const firstProbability = first.event.maximumProbability ?? -1;
+    const secondProbability = second.event.maximumProbability ?? -1;
+    return secondProbability - firstProbability || second.score - first.score || first.hoursToTca - second.hoursToTca;
+  }), [rankedEvents, recordMap, triageMinute]);
   const mlAlertCount = liveMlAlerts.length;
+  const primaryMlAlert = liveMlAlerts[0] ?? null;
+  const primaryMlProtectedId = primaryMlAlert ? chooseProtectedId(primaryMlAlert.event) : null;
+  const primaryMlCounterpart = primaryMlAlert && primaryMlProtectedId ? counterpartFor(primaryMlAlert.event, primaryMlProtectedId) : null;
+  const primaryMlProtectedName = primaryMlAlert && primaryMlProtectedId
+    ? cleanName(primaryMlAlert.event.primaryCatalogId === primaryMlProtectedId ? primaryMlAlert.event.primaryName : primaryMlAlert.event.secondaryName)
+    : null;
+  const selectPrimaryMlAlert = useCallback(() => {
+    if (primaryMlAlert) void selectEvent(primaryMlAlert.event, true, true);
+  }, [primaryMlAlert, selectEvent]);
   const selectedMlAlert = selectedMlAlertId
     ? liveMlAlerts.find((alert) => alert.event.id === selectedMlAlertId) ?? null
     : null;
 
   return <main className="ops-shell">
-    <header className="ops-header">
-      <div className="ops-brand"><span className="brand-glyph"><i /></span><div><strong>ORBITSHIELD</strong><small>ML conjunction risk predictor</small></div></div>
-      <div className="ops-automation"><Radar size={15} /><span><strong>RISK PREDICTOR ACTIVE</strong><small>Live two-day ML triage</small></span></div>
-      <div className="ops-header-summary"><span><b>{catalog?.count.toLocaleString() ?? 'N/A'}</b> active objects</span><i /><span><b>{screeningCandidateCount}</b> candidates</span><i /><span><b>{mlAlertCount}</b> ML alerts</span><i /><span><b>{modelBenchmark.models.length}</b> models tested</span></div>
-      <button className="ops-refresh" onClick={() => void refreshLive(true)} disabled={refreshing}><RefreshCw size={14} className={refreshing ? 'spinning' : ''} />{refreshing ? 'Refreshing' : 'Refresh'}</button>
-      <div className={`ops-feed-state ${statusTone(dataStatus)}`}><i /><span><b>{statusLabel(dataStatus)}</b><small>{lastRefresh ? formatIst(lastRefresh, { seconds: true }) : 'Connecting'}</small></span></div>
-    </header>
-
     <section className="ops-workspace">
       <aside className="ops-monitor-rail">
-        <div className="ops-panel-heading"><div><span>MONITORED FLEET</span><strong>India Earth Observation</strong></div><b><Activity size={12} /> 6 ACTIVE</b></div>
+        <div className="ops-panel-heading"><div><span>MONITORING FLEET</span><strong>Selected satellites</strong></div><b><Activity size={12} /> {fleetIds.length} MONITORED</b></div>
         <div className="ops-fleet-list">
           {INDIA_EO_FLEET.objects.map((satellite) => {
             const event = eventForSatellite(rankedEvents, satellite.catalogId);
@@ -452,19 +427,13 @@ export default function OperationsWorkspace() {
           })}
         </div>
 
-        <div className="ops-alert-heading model"><span><AlertTriangle size={13} /> LIVE ML RISK ALERTS</span><b>{mlAlertCount ? `${mlAlertCount} MODEL ELEVATED` : 'NO ELEVATED SCORE'}</b></div>
+        <div className="ops-alert-heading model"><span><AlertTriangle size={13} /> ML RISK ALERT</span><b>{mlAlertCount ? `1 PRIMARY · ${Math.max(0, mlAlertCount - 1)} QUEUED` : 'NO ELEVATED SCORE'}</b></div>
         <div className="ops-ml-alert-slot">
-          {liveMlAlerts.slice(0, 2).map((alert) => {
-            const protectedId = chooseProtectedId(alert.event);
-            const counterpart = counterpartFor(alert.event, protectedId);
-            const protectedName = cleanName(alert.event.primaryCatalogId === protectedId ? alert.event.primaryName : alert.event.secondaryName);
-            return <button key={alert.event.id} className={selectedMlAlertId === alert.event.id ? 'selected' : ''} onClick={() => void selectEvent(alert.event, true, true)}>
+          {primaryMlAlert && primaryMlCounterpart && primaryMlProtectedName ? <button className={selectedMlAlertId === primaryMlAlert.event.id ? 'selected' : ''} onClick={selectPrimaryMlAlert}>
               <span className="ops-alert-severity review"><Bot size={14} /></span>
-              <span className="ops-alert-copy"><strong>{protectedName}</strong><small>↳ {cleanName(counterpart.name)}</small><em>ML score {alert.score.toFixed(3)} crossed {alert.threshold.toFixed(2)}.</em></span>
-              <span className="ops-alert-metric"><b>{countdown(alert.event.tca, clock)}</b><small>{formatIst(alert.event.tca, { seconds: true })}</small></span>
-            </button>;
-          })}
-          {!liveMlAlerts.length && <div className="ops-ml-alert-empty"><ShieldCheck size={14} /><span><strong>No elevated two-day alert</strong><small>The model rescans the current fleet feed every minute.</small></span></div>}
+              <span className="ops-alert-copy"><strong>{primaryMlProtectedName}</strong><small>↳ {cleanName(primaryMlCounterpart.name)}</small><em>{probabilityPercent(primaryMlAlert.event.maximumProbability)} collision probability · model requires review</em></span>
+              <span className="ops-alert-metric"><b>{countdown(primaryMlAlert.event.tca, clock)}</b><small>{formatIst(primaryMlAlert.event.tca, { seconds: true })}</small></span>
+            </button> : <div className="ops-ml-alert-empty"><ShieldCheck size={14} /><span><strong>No elevated two-day alert</strong><small>The model rescans the current fleet feed every minute.</small></span></div>}
         </div>
 
         <div className="ops-alert-heading candidates"><span><Database size={13} /> PUBLIC SCREENING CANDIDATES</span><b>{screeningCandidateCount} WATCH OR REVIEW</b></div>
@@ -513,7 +482,7 @@ export default function OperationsWorkspace() {
           <small>{selectedEvent ? `${priorityLabels[selectedEvent.priority]} screening candidate · TCA ${formatIst(selectedEvent.tca, { seconds: true })}` : selectedRecord ? `${fleetIds.includes(Number(selectedRecord.NORAD_CAT_ID)) ? 'Monitored' : 'Catalogue'} satellite · NORAD ${selectedRecord.NORAD_CAT_ID}` : 'Select a satellite, screening candidate or ML alert'}</small>
         </div>
         <div className="ops-layer-legend"><span><i className="catalog" /> Catalogue satellites</span><span><i className="sat" /> Monitored satellites</span><span><i className="debris" /> Screened debris</span><span><i className="orbit" /> Monitored orbits</span></div>
-        <EsaModelEvidence open={esaEvidenceOpen} onToggle={() => setEsaEvidenceOpen((value) => !value)} />
+        <CurrentModelCard />
         {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected approach to TCA</span><span><i className="counterpart" /> Counterpart approach to TCA</span><span><i className="tca-target" /> Closest approach</span></div>}
         {selectedEvent && selectedProtectedId && replayPhase === 'encounter' && <EncounterOverlay event={selectedEvent} protectedId={selectedProtectedId} threat={selectedThreat} />}
         <div className="ops-globe-controls">
@@ -534,9 +503,11 @@ export default function OperationsWorkspace() {
           </section>
 
           <section className="ops-natural-language">
-            <div className="ops-section-label"><span>NATURAL-LANGUAGE BRIEF</span><b><ShieldCheck size={11} /> VERIFIED FIELDS ONLY</b></div>
-            <p>{explanation.whatIsHappening}</p>
-            <strong>{explanation.whyPrioritized}</strong>
+            <div className="ops-section-label"><span>BRIEF</span><b><ShieldCheck size={11} /> VERIFIED DATA</b></div>
+            <p>The current screening feed estimates a {probabilityPercent(selectedEvent.maximumProbability)} probability of collision for this encounter.</p>
+            <strong>{selectedMlAlert
+              ? `OrbitShield's model score of ${selectedMlAlert.score.toFixed(3)} crossed its ${selectedMlAlert.threshold.toFixed(2)} review threshold, so a human analyst should review the event.`
+              : `This is a ${priorityLabels[selectedEvent.priority].toLowerCase()} screening candidate. A human analyst should verify fresher tracking before any operational decision.`}</strong>
           </section>
 
           <section className="ops-risk-metrics">
@@ -558,7 +529,6 @@ export default function OperationsWorkspace() {
             <p>{selectedMlAlert
               ? 'The deployed model scored this current event from time to TCA, present risk, miss distance and relative speed. Its elevated score places the event in the analyst queue.'
               : 'This event did not cross the deployed two-day model threshold, or its TCA is outside the current 48-hour inference window.'}</p>
-            <details><summary>Model evidence and limits <ChevronDown size={13} /></summary><div className="ops-model-proof"><span><b>{PUBLIC_TRIAGE_MODEL.dataset.trainEvents.toLocaleString()}</b> train events</span><span><b>{PUBLIC_TRIAGE_MODEL.test.f2.toFixed(3)}</b> test F2</span><span><b>{PUBLIC_TRIAGE_MODEL.test.recall.toFixed(3)}</b> test recall</span></div><p>The Histogram Gradient Boosting model uses only four fields available in both the training archive and current screening feed. The event split keeps test events outside training. The score ranks review priority; it is not collision probability.</p></details>
           </section>
 
           <section className="ops-action-plan">
@@ -576,7 +546,7 @@ export default function OperationsWorkspace() {
             <small>NORAD {selectedSatelliteId} · {selectedRecord.OBJECT_ID || 'International designator unavailable'}</small>
           </section>
           <p className="ops-object-summary">{selectedFleetSatellite
-            ? `${selectedFleetSatellite.name} is monitored as part of the India Earth Observation fleet. Mission focus: ${selectedFleetSatellite.mission}.`
+            ? `${selectedFleetSatellite.name} is part of the active monitoring fleet. Mission focus: ${selectedFleetSatellite.mission}.`
             : `${cleanName(selectedRecord.OBJECT_NAME)} is an active public-catalogue payload. OrbitShield shows verified orbital metadata and its current SGP4 position without treating it as part of the monitored fleet.`}</p>
           <section className="ops-object-grid">
             <div><span>Object type</span><strong>{selectedRecord.OBJECT_TYPE || selectedObjectThreat?.objectType || 'Payload'}</strong></div>

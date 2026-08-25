@@ -14,9 +14,10 @@ turns only elevated results into analyst alerts with an evidence brief.
 ## Judge workflow
 
 1. The application opens with automatic source refresh, green public-catalogue
-   satellites, six blue monitored satellites and orbits, live ML alerts and a
-   separate public candidate queue. A compact ESA CDM evidence card remains
-   visible over the globe and can collapse when the judge needs more space.
+   satellites, six blue monitored satellites and orbits, one primary ML risk
+   alert and a separate public candidate queue. A compact current-model card
+   identifies the deployed two-day Public Feed HGB model without showing the
+   full research benchmark in the judge path.
 2. The model rescans complete current events inside 48 hours every minute. A
    named event appears under Live ML Risk Alerts only after its score crosses
    the stored threshold.
@@ -26,15 +27,14 @@ turns only elevated results into analyst alerts with an evidence brief.
    protected path and dashed red counterpart path start at their displayed SGP4
    positions and end at the circled TCA geometry. The red target pulses during
    the replay. Accelerated follow keeps the pair visible while time advances.
-5. The right rail shows the model score, stored threshold, hours to TCA and
-   input coverage. It explains the four feed-compatible features and exposes
-   event-held-out test evidence.
+5. The right rail gives a brief: the source collision probability, the model
+   score and threshold, and the reason human review is required. The model
+   score remains separate from the source probability.
 6. Clicking the alert starts a 6.5-second globe replay. A chase camera follows
    the protected satellite before it acquires the counterpart and arrives at
    the pulsing red TCA target.
-7. The ESA evidence card compares the five researched CDM models, identifies
-   the 76-feature Histogram Gradient Boosting champion and states that the tier
-   requires compatible operator CDMs.
+7. The five-model ESA benchmark remains available in the implementation and
+   project evidence, but it no longer crowds the live monitoring workspace.
 
 ## Customer and value
 

@@ -28,10 +28,10 @@ orbits and TCA replay in one WebGL scene. The right rail renders either a
 selected object's verified profile, a public candidate review, or the live
 model state.
 
-The globe stage includes a collapsible ESA CDM evidence card. It reads the
-committed five-model benchmark, shows the champion's held-out metrics and plots
-each model's test F2. The card labels this model as the professional tier and
-keeps it separate from the public-feature model that generates current alerts.
+The globe stage includes one compact card for the deployed public-feature
+model. It shows the model name, tree count, live-input count and score threshold.
+The full ESA five-model comparison remains committed as research evidence but
+does not appear in the default judge workspace.
 
 The replay clock writes verified SGP4 states to a shared frame reference. A
 WebGL animation loop moves only the selected pair and camera, so the monitoring
@@ -69,6 +69,13 @@ features used during training. A 37-tree Histogram Gradient Boosting classifier
 raises an alert when its score crosses 0.67. It reaches 0.631 test F2, 0.933
 test recall and 0.529 test PR-AUC on an event-held-out split. The score ranks
 analyst review and does not replace the source probability.
+
+Elevated events are ranked first by the source maximum collision probability,
+then by model score and time to TCA. The left rail exposes only the primary
+alert and reports how many elevated events remain queued. Repeated raw scores
+are possible when events land in the same gradient-boosting leaves, so the
+alert card displays the source probability while the selected-event view shows
+the raw model score and threshold once.
 
 ## CDM intelligence lane
 
