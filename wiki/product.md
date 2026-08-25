@@ -25,10 +25,11 @@ and a controlled escalation workflow.
    protected path and dashed red counterpart path start at their displayed SGP4
    positions and end at the circled TCA geometry. Accelerated follow keeps the
    pair visible while time advances.
-5. The live CDM card streams nine messages from held-out ESA event 9051 through
-   the production inference contract. The score updates after each arrival,
-   exposes feature coverage, and lets the judge reveal the recorded outcome
-   only after inference completes.
+5. The real-time CDM card explains the message format and listens for an
+   operator feed. The judge can use the labelled ESA test feed to send nine
+   held-out messages through the same ingestion contract. The score updates
+   after each arrival, exposes feature coverage, and reveals the recorded
+   outcome only after inference completes.
 
 ## Customer and value
 
@@ -68,7 +69,9 @@ validated model scoring, team notifications and review history.
 The hackathon build prioritizes one persistent and explainable workflow. The
 public screening alert triggers without a private data connection. The trained
 model runs end to end on a source-labelled held-out CDM stream and the same
-endpoint accepts a future compatible operator feed. Public events remain gated
-when uncertainty and covariance fields are absent. Authentication, autonomous
+live endpoint accepts compatible operator messages one at a time. No anonymous
+operational CDM provider is configured in the hackathon build, so the interface
+labels the ESA source as a test feed. Public events remain gated when
+uncertainty and covariance fields are absent. Authentication, autonomous
 manoeuvres, broad fleet administration, and operational certification remain
 outside this release.

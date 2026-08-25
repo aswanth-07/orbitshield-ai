@@ -861,6 +861,8 @@ details li,
 .ops-live-model-title strong { color: #e0e8ea; font-size: 13px; }
 .ops-live-model-title small { margin-top: 3px; color: #718087; font-size: 8px; }
 .ops-live-model-title > svg { color: #50d9b3; }
+.ops-cdm-definition { margin: 10px 0 0; padding: 8px; border-left: 2px solid #3a9db3; background: rgba(42,121,139,.06); color: #7f9096; font-size: 8px; line-height: 1.48; }
+.ops-cdm-definition b { color: #8ce4f5; font: 700 8px var(--font-geist-mono), monospace; }
 .ops-live-model-intro { margin: 11px 0 0; color: #87959b; font-size: 9px; line-height: 1.5; }
 .ops-live-model-progress { height: 3px; margin-top: 11px; overflow: hidden; border-radius: 4px; background: #1d292e; }
 .ops-live-model-progress i { display: block; height: 100%; background: linear-gradient(90deg,#258ca7,#5de1f8); transition: width .35s ease; }

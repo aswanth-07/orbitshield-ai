@@ -78,12 +78,20 @@ evaluator matches the Python model after every message in the reserved event
 sequence. Responses carry the model identity, input coverage, threshold,
 triage score and an explicit non-probability warning.
 
-The main workspace streams the nine visible messages from held-out event 9051
-through this endpoint. The score therefore changes as evidence arrives through
-the same contract intended for a future operator connector. The recorded final
-message remains hidden until the stream completes. Public SOCRATES events stay
-separate and retain `Awaiting CDM` because their fields cannot satisfy this
-contract.
+`GET`, `POST` and `DELETE /api/model/live` provide the real-time ingestion
+surface used by the workspace. A provider posts one CDM at a time. The current
+worker isolate retains the active event, updates the score after every arrival,
+and exposes the latest state without caching. The dashboard polls this state
+every 1.5 seconds. `CDM_INGEST_TOKEN` can protect writes when configured. This
+in-memory channel supports the local hackathon demonstration; a production
+deployment replaces it with durable event storage or a direct provider query.
+
+The main workspace starts in a listening state. A connected operator feed is
+labelled `OPERATOR FEED`. When no external provider is configured, the judge can
+run a labelled ESA test feed that sends the nine visible messages from held-out
+event 9051 through the same ingestion route. The recorded final message remains
+hidden until the test stream completes. Public SOCRATES events stay separate
+and retain `Awaiting CDM` because their fields cannot satisfy this contract.
 
 The accelerated TCA replay uses a fixed twenty-minute window and a 6.5-second
 presentation duration. Camera phases follow the protected object, acquire the
@@ -109,3 +117,4 @@ source hash needed for deterministic inference.
 - Model results never overwrite SOCRATES fields or claim operational authority.
 - The T-2 cutoff and reserved-event identity travel with every replay result.
 - Live model input below the T-2 cutoff is rejected before feature generation.
+- External and held-out test feeds remain visibly distinguishable.
