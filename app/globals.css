@@ -985,6 +985,45 @@ details li,
 .ops-study-alternatives b, .ops-study-alternatives small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ops-study-alternatives b { color: #c8d5d7; font: 700 7px var(--font-geist-mono), monospace; }
 .ops-study-alternatives small { margin-top: 3px; color: #65747a; font-size: 7px; }
+.ops-study-pathspace { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 6px; padding: 9px; border: 1px solid #2f4a56; border-radius: 6px; background: rgba(77,157,255,.07); color: #4d9dff; text-align: left; cursor: pointer; }
+.ops-study-pathspace:hover { border-color: #4d9dff; background: rgba(77,157,255,.12); }
+.ops-study-pathspace span { min-width: 0; }
+.ops-study-pathspace strong, .ops-study-pathspace small { display: block; }
+.ops-study-pathspace strong { color: #d9e7f5; font-size: 9px; }
+.ops-study-pathspace small { margin-top: 2px; color: #6d8496; font-size: 7px; }
+
+.ops-pathspace { position: fixed; z-index: 60; inset: 0; display: flex; flex-direction: column; background: rgba(3,5,7,.96); backdrop-filter: blur(6px); }
+.ops-pathspace header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 20px 12px; border-bottom: 1px solid #1c262d; }
+.ops-pathspace header b { color: #4d9dff; font: 700 9px var(--font-geist-mono), monospace; letter-spacing: .16em; }
+.ops-pathspace header h2 { margin: 5px 0 4px; color: #eef4f8; font-size: 16px; font-weight: 700; }
+.ops-pathspace header small { display: block; max-width: 780px; color: #7f8f9a; font-size: 9px; line-height: 1.6; }
+.ops-pathspace header button { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid #2a3640; border-radius: 6px; color: #9fb3c0; background: transparent; cursor: pointer; }
+.ops-pathspace header button:hover { border-color: #4d9dff; color: #d9e7f5; }
+.ops-pathspace-body { display: grid; grid-template-columns: minmax(0,1fr) 310px; flex: 1; min-height: 0; }
+.ops-pathspace-canvas { min-width: 0; min-height: 0; }
+.ops-pathspace-canvas canvas { display: block; width: 100%; height: 100%; }
+.ops-pathspace aside { display: flex; flex-direction: column; gap: 12px; padding: 16px; overflow-y: auto; border-left: 1px solid #1c262d; }
+.ops-pathspace-legend { display: grid; gap: 6px; }
+.ops-pathspace-legend button { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border: 1px solid #22303a; border-radius: 6px; background: #080c0f; text-align: left; cursor: pointer; }
+.ops-pathspace-legend button.off { opacity: .38; }
+.ops-pathspace-legend button:hover { border-color: #3a4d5a; }
+.ops-pathspace-legend i { flex-shrink: 0; width: 9px; height: 9px; margin-top: 3px; border-radius: 50%; }
+.ops-pathspace-legend span { min-width: 0; }
+.ops-pathspace-legend strong, .ops-pathspace-legend em, .ops-pathspace-legend span > b { display: block; }
+.ops-pathspace-legend strong { color: #e2ecf2; font-size: 9.5px; }
+.ops-pathspace-legend em { margin-top: 2px; color: #6d818e; font-size: 7.5px; font-style: normal; line-height: 1.5; }
+.ops-pathspace-legend span > b { margin-top: 3px; color: #a8bcc8; font: 700 8px var(--font-geist-mono), monospace; }
+.ops-pathspace-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ops-pathspace-facts span { padding: 7px; border: 1px solid #22303a; border-radius: 5px; background: #080c0f; }
+.ops-pathspace-facts small, .ops-pathspace-facts strong { display: block; }
+.ops-pathspace-facts small { color: #5f7280; font-size: 7px; }
+.ops-pathspace-facts strong { margin-top: 3px; color: #d5e2ea; font: 700 8.5px var(--font-geist-mono), monospace; }
+.ops-pathspace-note { color: #677986; font-size: 7.8px; line-height: 1.65; }
+.ops-pathspace-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 9px; padding: 40px; text-align: center; }
+.ops-pathspace-empty p { max-width: 620px; color: #b6c6d0; font-size: 11px; line-height: 1.7; }
+.ops-pathspace-empty p.muted { color: #6b7d8a; font-size: 9px; }
+@media (max-width: 900px) { .ops-pathspace-body { grid-template-columns: 1fr; grid-template-rows: minmax(240px,1fr) auto; } .ops-pathspace aside { border-left: 0; border-top: 1px solid #1c262d; } }
+
 .globe-scale { position: absolute; z-index: 9; bottom: 74px; left: 16px; display: flex; align-items: center; gap: 7px; padding: 6px 9px; border: 1px solid rgba(42,55,61,.6); border-radius: 5px; background: rgba(6,9,11,.72); color: #8b989e; backdrop-filter: blur(8px); pointer-events: none; }
 .globe-scale-bar { display: block; width: 80px; height: 6px; border: 1px solid #7f9098; border-top: 0; transition: width .12s linear; }
 .globe-scale-value { color: #d5e2e4; font: 700 9px var(--font-geist-mono), monospace; white-space: nowrap; }
@@ -1210,3 +1249,13 @@ details li,
   .ops-live-model-metrics { grid-template-columns: 1fr 1fr !important; }
   .ops-live-model-evidence { grid-template-columns: 1fr !important; }
 }
+.ops-pathspace-legend span > u { display: block; margin-top: 3px; color: #6d818e; font-size: 7px; font-style: normal; text-decoration: none; line-height: 1.5; }
+.ops-pathspace-actions { display: flex; align-items: center; gap: 8px; }
+.ops-pathspace-framing { display: flex; overflow: hidden; border: 1px solid #2a3640; border-radius: 6px; }
+.ops-pathspace-framing button { width: auto; height: 30px; padding: 0 11px; border: 0; border-right: 1px solid #2a3640; border-radius: 0; color: #8195a3; font: 600 9px var(--font-geist-mono), monospace; background: transparent; cursor: pointer; }
+.ops-pathspace-framing button:last-child { border-right: 0; }
+.ops-pathspace-framing button.active { color: #06121a; background: #4d9dff; }
+.ops-pathspace-static { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border: 1px solid #22303a; border-radius: 6px; background: #080c0f; }
+.ops-pathspace-static i { flex-shrink: 0; width: 9px; height: 9px; margin-top: 3px; border-radius: 50%; }
+.ops-pathspace-static strong { display: block; color: #e2ecf2; font-size: 9.5px; }
+.ops-pathspace-static em { display: block; margin-top: 2px; color: #6d818e; font-size: 7.5px; font-style: normal; }

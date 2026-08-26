@@ -111,6 +111,31 @@ probability null because public elements do not include the covariance and
 hard-body radius needed for that calculation. A professional connector must
 provide an operator CDM and run a full-catalogue re-screen before flight review.
 
+`app/path-space-view.tsx` opens the encounter as a three-dimensional plot,
+because a kilometre of separation against a 6,371 km Earth is a fraction of a
+pixel on the globe. `app/lib/path-space.ts` rebuilds the geometry in the
+satellite's local axes: along-track and cross-track span the horizontal plane
+and radial is altitude, so height reads vertically. Both objects travel through
+the frame with their own start markers, the current path is red, the recommended
+burn green, and the remaining candidates blue. An arrow at each start shows the
+impulse direction in the same axes.
+
+The published miss distance sets the separation and propagation supplies only
+its direction, which is the convention `buildManeuverStudy` already uses. That
+keeps the plot and the panel identical at the published closest-approach time.
+The plot also reports the true minimum over the window, which sits lower when a
+burn moves when the encounter happens rather than only how far away it is.
+
+Three framings run the corridor to three, eight or twenty-two times the widest
+separation, and the fit control frames the drawn paths so both start points and
+the closest approach stay in view.
+
+The view holds its inputs from the moment it opens, because the workspace clock
+re-renders its parent twice a second and rebuilding the scene on each of those
+made it unusable. The renderer, camera and controls are created once, only the
+drawn content is rebuilt when the framing or visible set changes, and frames are
+rendered on demand rather than from a continuous loop.
+
 Wide screens use the three-part workspace. Between 701 and 980 pixels, the
 analysis rail moves below the fleet and globe instead of covering the WebGL
 scene. Narrow screens order the globe first, the selected analysis second, and

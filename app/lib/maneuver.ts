@@ -43,6 +43,8 @@ export type ManeuverStudy = {
   probabilityStatus: string;
   recommended: ManeuverCandidate | null;
   alternatives: ManeuverCandidate[];
+  /** Every candidate that met the separation goal, ordered as the ranking sees them. */
+  rankedCandidates: ManeuverCandidate[];
   assumptions: ManeuverAssumptions;
   method: string;
   requiredChecks: string[];
@@ -193,7 +195,7 @@ export function buildManeuverStudy({
   now: number;
   assumptions?: ManeuverAssumptions;
 }): ManeuverStudy {
-  const base: Omit<ManeuverStudy, 'status' | 'reason' | 'recommended' | 'alternatives'> = {
+  const base: Omit<ManeuverStudy, 'status' | 'reason' | 'recommended' | 'alternatives' | 'rankedCandidates'> = {
     sourceMaximumProbability: event.maximumProbability,
     sourceMissDistanceKm: event.rangeKm,
     postManeuverProbability: null,
@@ -209,22 +211,22 @@ export function buildManeuverStudy({
   };
 
   if (!protectedRecord || !counterpartRecord || event.rangeKm === null || !finitePositive(event.rangeKm)) {
-    return { ...base, status: 'insufficient-data', reason: 'The selected pair does not have enough public geometry for a manoeuvre study.', recommended: null, alternatives: [] };
+    return { ...base, status: 'insufficient-data', reason: 'The selected pair does not have enough public geometry for a manoeuvre study.', recommended: null, alternatives: [], rankedCandidates: [] };
   }
   const meanMotionRevolutionsPerDay = Number(protectedRecord.MEAN_MOTION);
   const eccentricity = Number(protectedRecord.ECCENTRICITY);
   if (!finitePositive(meanMotionRevolutionsPerDay) || !Number.isFinite(eccentricity) || eccentricity > 0.01) {
-    return { ...base, status: 'insufficient-data', reason: 'The linearized near-circular model is not suitable for this orbit record.', recommended: null, alternatives: [] };
+    return { ...base, status: 'insufficient-data', reason: 'The linearized near-circular model is not suitable for this orbit record.', recommended: null, alternatives: [], rankedCandidates: [] };
   }
   const tca = new Date(event.tca).getTime();
   const hoursToTca = (tca - now) / 3_600_000;
   const leadTimes = planningLeadTimes(hoursToTca);
   if (!leadTimes.length) {
-    return { ...base, status: 'outside-window', reason: 'Fewer than six hours remain before TCA, so this prototype will not create a late manoeuvre candidate.', recommended: null, alternatives: [] };
+    return { ...base, status: 'outside-window', reason: 'Fewer than six hours remain before TCA, so this prototype will not create a late manoeuvre candidate.', recommended: null, alternatives: [], rankedCandidates: [] };
   }
   const encounterDirection = normalizedRtnDirection(event, protectedRecord, counterpartRecord);
   if (!encounterDirection) {
-    return { ...base, status: 'insufficient-data', reason: 'The current public elements could not produce a stable R-T-N encounter direction.', recommended: null, alternatives: [] };
+    return { ...base, status: 'insufficient-data', reason: 'The current public elements could not produce a stable R-T-N encounter direction.', recommended: null, alternatives: [], rankedCandidates: [] };
   }
 
   const meanMotionRadS = meanMotionRevolutionsPerDay * Math.PI * 2 / SECONDS_PER_DAY;
@@ -304,6 +306,7 @@ export function buildManeuverStudy({
       : `No advisory impulse below ${MAX_ADVISORY_DELTA_V_MPS.toFixed(2)} m/s reached the ${assumptions.targetSeparationGainKm.toFixed(1)} km separation-gain objective at the source TCA.`,
     recommended,
     alternatives,
+    rankedCandidates: ranked,
   };
 }
 

@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import {
   Activity, AlertTriangle, Bot, CircleDot, Clock3,
   Crosshair, Database, Eye, Fuel, LocateFixed, Lock, Pause, Play, Plus,
-  Radar, RotateCcw, Route, Satellite, Search, Settings2, ShieldCheck,
+  Boxes, Radar, RotateCcw, Route, Satellite, Search, Settings2, ShieldCheck,
   Sparkles, TriangleAlert, X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -38,6 +38,8 @@ const OrbitGlobe = dynamic(() => import('./orbit-globe'), {
   ssr: false,
   loading: () => <div className="globe-loading static">Starting orbital monitor…</div>,
 });
+
+const PathSpaceView = dynamic(() => import('./path-space-view'), { ssr: false });
 
 const fleetOrbitSnapshot = fleetOrbitFixture as {
   source: string;
@@ -155,6 +157,7 @@ function ManeuverStudyPanel({
   const [pathVisible, setPathVisible] = useState(false);
   const [assumptions, setAssumptions] = useState(DEFAULT_MANEUVER_ASSUMPTIONS);
   const [drafts, setDrafts] = useState<Partial<Record<keyof ManeuverAssumptions, string>>>({});
+  const [pathSpaceOpen, setPathSpaceOpen] = useState(false);
   const study = useMemo(() => buildManeuverStudy({
     event,
     protectedRecord,
@@ -257,6 +260,16 @@ function ManeuverStudyPanel({
         {candidates.length > 1 && <details className="ops-study-disclosure"><summary>Compare two alternatives</summary><div className="ops-study-alternatives">{candidates.map((candidate) => <button key={candidate.id} aria-pressed={candidate.id === selectedCandidate.id} className={candidate.id === selectedCandidate.id ? 'selected' : ''} onClick={() => { setSelectedCandidateId(candidate.id); if (pathVisible) onCandidateChange(candidate); }}><b>{candidate.direction} · {candidate.deltaVMps.toFixed(3)} m/s</b><small>+{candidate.separationGainAtSourceTcaKm.toFixed(1)} km at source TCA · {candidate.propellantGrams.toFixed(1)} g</small></button>)}</div></details>}
         <details className="ops-study-disclosure"><summary>Validation gates</summary><div className="ops-study-checks"><span><i className="ready" /> Linearized RTN geometry modeled</span><span><i /> Covariance-backed Pc unavailable</span><span><i /> Full-catalogue re-screen not run</span><span><i /> Operator approval required</span></div></details>
         <button className="ops-study-export" onClick={() => downloadManeuverCandidate(event, selectedCandidate, assumptions, study)}><Fuel size={14} /><span><strong>Export for flight-dynamics review</strong><small>Method, assumptions, geometry and validation gates in JSON</small></span></button>
+        <button className="ops-study-pathspace" onClick={() => setPathSpaceOpen(true)}><Boxes size={14} /><span><strong>Compare paths in 3D</strong><small>Current, recommended and alternative paths at true scale</small></span></button>
+        {pathSpaceOpen && <PathSpaceView
+          event={event}
+          protectedRecord={protectedRecord}
+          counterpartRecord={counterpartRecord}
+          candidates={study.rankedCandidates.slice(0, 6)}
+          recommendedId={study.recommended?.id ?? null}
+          assumptions={assumptions}
+          onClose={() => setPathSpaceOpen(false)}
+        />}
       </> : <p className="ops-study-unavailable">{study.reason}</p>}
       <details className="ops-study-disclosure"><summary><Settings2 size={12} /> Edit example propulsion profile</summary><div className="ops-study-assumptions">
         <label>Mass, kg<input type="number" value={drafts.spacecraftMassKg ?? assumptions.spacecraftMassKg} onChange={(event) => updateAssumption('spacecraftMassKg', event.target.value)} onBlur={() => commitAssumption('spacecraftMassKg')} /></label>
