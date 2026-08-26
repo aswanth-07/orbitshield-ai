@@ -53,6 +53,24 @@ window so repeated Earth-fixed ground tracks do not obscure the encounter. The
 protected path is solid red and the counterpart path is dashed red. Their first
 and last samples equal the displayed start time and TCA time.
 
+Three depth cues make altitude and orientation readable without adding assets
+or per-frame work. `app/lib/globe-depth.ts` holds the pure parts.
+
+Droplines join every monitored satellite to its sub-satellite point in one
+`LineSegments` buffer, so the whole layer is a single draw call. The layer is
+skipped during TCA replay, because the replay rewrites scene points on every
+animation frame and the camera is locked to the pair by then.
+
+A directional light placed at the subsolar point lights the globe, which gives a
+real day and night terminator from the low-precision NOAA solar position. This
+needs no night texture and no custom shader, so it adds no download and no
+per-frame cost. The light moves only when the background time bucket advances.
+
+Three back-faced translucent spheres mark the 550 km mega-constellation shell,
+the 600 to 800 km Sun-synchronous corridor and the 1,200 km polar shell, each
+with an equator ring. They are built once per globe and never touch the
+animation loop.
+
 The globe samples stable background orbit paths on a five-minute time bucket.
 The TCA replay moves only the selected markers and camera on each animation
 frame. This keeps SGP4 path generation out of the high-frequency render loop.

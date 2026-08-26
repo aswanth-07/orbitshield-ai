@@ -13,6 +13,7 @@ import {
   type TcaReplayFrame,
   type TcaReplayPhase,
 } from './lib/collision-visualization';
+import { ALTITUDE_SHELLS, shellRadius, subsolarPoint } from './lib/globe-depth';
 import { sampleSgp4AnchoredManeuverPath, type ManeuverCandidate } from './lib/maneuver';
 import { prepareOmm, propagateOmm, propagatePreparedOmm, sampleDynamicOrbitPath, sampleOrbitSegment } from './lib/orbit';
 import type { ConjunctionRecord, OmmRecord, OrbitPath, PropagatedObject, ThreatObject } from './lib/types';
@@ -55,6 +56,7 @@ type ScenePoint = PropagatedObject & {
   threat?: ThreatObject;
 };
 
+const SUN_LIGHT_NAME = 'orbitshield-sun';
 const RENDERER_CONFIG = { antialias: false, alpha: true, powerPreference: 'high-performance' as const };
 
 function closestApproachTarget() {
@@ -621,6 +623,121 @@ export default function OrbitGlobe({
           : `COUNTERPART · ${point.name}`
       : `MONITORED · ${point.name}`,
   })), [fleetIds, replayActive, reviewPair, scenePoints, selectedIds, showFleetLabels]);
+
+  // Altitude shells. Three low-poly back-faced spheres marking the densest
+  // operational bands. Built once per globe, so they cost three draw calls and
+  // never touch the animation loop.
+  useEffect(() => {
+    if (!globeReady || !globeRef.current) return;
+    const globe = globeRef.current;
+    const scene = globe.scene();
+    const globeRadius = globe.getGlobeRadius();
+    const group = new THREE.Group();
+    group.renderOrder = -1;
+    for (const shell of ALTITUDE_SHELLS) {
+      const radius = shellRadius(globeRadius, shell.altitudeKm);
+      const surface = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 32, 20),
+        new THREE.MeshBasicMaterial({
+          color: shell.color,
+          transparent: true,
+          opacity: 0.035,
+          side: THREE.BackSide,
+          depthWrite: false,
+        }),
+      );
+      const equatorPoints = Array.from({ length: 97 }, (_, index) => {
+        const angle = (index / 96) * Math.PI * 2;
+        return new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+      });
+      const equator = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(equatorPoints),
+        new THREE.LineBasicMaterial({ color: shell.color, transparent: true, opacity: 0.22, depthWrite: false }),
+      );
+      group.add(surface, equator);
+    }
+    scene.add(group);
+    return () => {
+      scene.remove(group);
+      group.traverse((child) => {
+        const mesh = child as THREE.Mesh | THREE.Line;
+        mesh.geometry?.dispose();
+        const material = mesh.material as THREE.Material | undefined;
+        material?.dispose();
+      });
+    };
+  }, [globeReady]);
+
+  // Day and night. One directional light placed at the subsolar point gives a
+  // real terminator without a night texture or a custom shader, so it adds no
+  // download and no per-frame work.
+  useEffect(() => {
+    if (!globeReady || !globeRef.current) return;
+    const globe = globeRef.current;
+    const scene = globe.scene();
+    const subsolar = subsolarPoint(new Date(backgroundTime));
+    if (!subsolar) return;
+
+    for (const child of scene.children) {
+      if ((child as THREE.AmbientLight).isAmbientLight) (child as THREE.AmbientLight).intensity = 0.22;
+      if ((child as THREE.DirectionalLight).isDirectionalLight && child.name !== SUN_LIGHT_NAME) {
+        (child as THREE.DirectionalLight).intensity = 0;
+      }
+    }
+
+    let sun = scene.getObjectByName(SUN_LIGHT_NAME) as THREE.DirectionalLight | undefined;
+    if (!sun) {
+      sun = new THREE.DirectionalLight(0xfff4e2, 1.45);
+      sun.name = SUN_LIGHT_NAME;
+      scene.add(sun);
+    }
+    const distance = globe.getGlobeRadius() * 40;
+    const direction = globe.getCoords(subsolar.lat, subsolar.lng, 0);
+    const length = Math.hypot(direction.x, direction.y, direction.z) || 1;
+    sun.position.set(
+      direction.x / length * distance,
+      direction.y / length * distance,
+      direction.z / length * distance,
+    );
+  }, [backgroundTime, globeReady]);
+
+  // Droplines. One LineSegments buffer for every monitored satellite, so the
+  // whole layer is a single draw call. The replay drives scenePoints on every
+  // animation frame, so the layer stays out of that phase rather than
+  // reallocating its buffer per frame. The camera is locked to the pair then and
+  // an altitude cue for the wider fleet has nothing to add.
+  useEffect(() => {
+    if (!globeReady || !globeRef.current || replayActive) return;
+    const globe = globeRef.current;
+    const scene = globe.scene();
+    const anchors = scenePoints.filter((point) => fleetIds.includes(point.catalogId));
+    if (!anchors.length) return;
+
+    const positions = new Float32Array(anchors.length * 6);
+    anchors.forEach((point, index) => {
+      const surface = globe.getCoords(point.lat, point.lng, 0);
+      const orbit = globe.getCoords(point.lat, point.lng, point.altitude);
+      positions.set([surface.x, surface.y, surface.z, orbit.x, orbit.y, orbit.z], index * 6);
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const segments = new THREE.LineSegments(
+      geometry,
+      new THREE.LineBasicMaterial({
+        color: MONITORED_SATELLITE_COLOR,
+        transparent: true,
+        opacity: 0.28,
+        depthWrite: false,
+      }),
+    );
+    segments.renderOrder = 1;
+    scene.add(segments);
+    return () => {
+      scene.remove(segments);
+      geometry.dispose();
+      (segments.material as THREE.Material).dispose();
+    };
+  }, [fleetIds, globeReady, replayActive, scenePoints]);
 
   useEffect(() => {
     const globe = globeRef.current;
