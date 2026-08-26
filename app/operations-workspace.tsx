@@ -629,8 +629,10 @@ export default function OperationsWorkspace() {
     setTrajectoryStartTime(null);
     setCatalogueVisible(true);
     setSelectedSatelliteId(catalogId);
-    setCameraMode('follow');
-    setCameraResetKey((value) => value + 1);
+    // Selecting a satellite opens its profile and leaves the camera alone. A
+    // jump on every click reads as though a different object swung into view.
+    // Track is the control that follows an object, and it stays deliberate.
+    setCameraMode((mode) => (mode === 'pair-follow' || mode === 'encounter' ? 'global' : mode));
   }
 
   function addMonitoredSatellite(catalogId: number) {
@@ -670,7 +672,7 @@ export default function OperationsWorkspace() {
     simulationRef.current = now;
     setSimulationTime(now);
     setPlaying(true);
-    setCameraMode(selectedSatelliteId ? 'follow' : 'global');
+    setCameraMode((mode) => ((mode === 'follow' || mode === 'pair-follow') && selectedSatelliteId ? 'follow' : 'global'));
     setCameraResetKey((value) => value + 1);
   }
 

@@ -66,3 +66,51 @@ export function subsolarPoint(date: Date): { lat: number; lng: number } | null {
 export function shellRadius(globeRadius: number, altitudeKm: number) {
   return globeRadius * (1 + altitudeKm / EARTH_RADIUS_KM);
 }
+
+const SCALE_STEPS_KM = [10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 20_000];
+
+/**
+ * A rough distance scale for the current camera height.
+ *
+ * The bar is measured across the middle of the view at the globe surface, so it
+ * is only an order-of-magnitude cue: anything nearer the limb sits further from
+ * the camera and reads shorter than the bar suggests.
+ */
+export function scaleBarForView({
+  cameraDistance,
+  globeRadius,
+  verticalFovDegrees,
+  viewportHeightPx,
+  minimumBarPx = 56,
+  maximumBarPx = 150,
+}: {
+  cameraDistance: number;
+  globeRadius: number;
+  verticalFovDegrees: number;
+  viewportHeightPx: number;
+  minimumBarPx?: number;
+  maximumBarPx?: number;
+}): { km: number; pixels: number } | null {
+  if (![cameraDistance, globeRadius, verticalFovDegrees, viewportHeightPx].every(Number.isFinite)) return null;
+  if (globeRadius <= 0 || viewportHeightPx <= 0 || verticalFovDegrees <= 0 || verticalFovDegrees >= 180) return null;
+
+  const surfaceDistance = Math.max(cameraDistance - globeRadius, globeRadius * 0.02);
+  const visibleHeightUnits = 2 * surfaceDistance * Math.tan(verticalFovDegrees * DEGREES / 2);
+  const kilometresPerPixel = (visibleHeightUnits / viewportHeightPx) * (EARTH_RADIUS_KM / globeRadius);
+  if (!Number.isFinite(kilometresPerPixel) || kilometresPerPixel <= 0) return null;
+
+  const target = (minimumBarPx + maximumBarPx) / 2;
+  let best: { km: number; pixels: number } | null = null;
+  let bestPenalty = Infinity;
+  for (const km of SCALE_STEPS_KM) {
+    const pixels = km / kilometresPerPixel;
+    const withinRange = pixels >= minimumBarPx && pixels <= maximumBarPx;
+    const penalty = (withinRange ? 0 : 1_000_000) + Math.abs(pixels - target);
+    if (penalty < bestPenalty) {
+      bestPenalty = penalty;
+      best = { km, pixels: Math.round(pixels) };
+    }
+  }
+  if (!best) return null;
+  return { km: best.km, pixels: Math.max(1, Math.min(best.pixels, maximumBarPx * 2)) };
+}

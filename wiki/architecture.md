@@ -53,6 +53,18 @@ window so repeated Earth-fixed ground tracks do not obscure the encounter. The
 protected path is solid red and the counterpart path is dashed red. Their first
 and last samples equal the displayed start time and TCA time.
 
+A rough distance scale sits at the bottom left of the globe. `scaleBarForView`
+converts the camera height, the vertical field of view and the viewport height
+into kilometres per pixel, then picks the roundest step that fills a readable
+bar. It is measured across the middle of the view at the Earth surface and is
+labelled approx, because anything nearer the limb sits further from the camera
+than the bar implies. The bar redraws from an OrbitControls change listener
+writing straight to the DOM, so zooming never triggers a React render.
+
+Selecting a satellite opens its profile and leaves the camera where it is. Only
+Track, the replay and an event selection move the camera, because an
+unrequested jump reads as though a different object swung into view.
+
 Three depth cues make altitude and orientation readable without adding assets
 or per-frame work. `app/lib/globe-depth.ts` holds the pure parts.
 

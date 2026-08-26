@@ -13,7 +13,7 @@ import {
   type TcaReplayFrame,
   type TcaReplayPhase,
 } from './lib/collision-visualization';
-import { ALTITUDE_SHELLS, shellRadius, subsolarPoint } from './lib/globe-depth';
+import { ALTITUDE_SHELLS, scaleBarForView, shellRadius, subsolarPoint } from './lib/globe-depth';
 import { sampleSgp4AnchoredManeuverPath, type ManeuverCandidate } from './lib/maneuver';
 import { prepareOmm, propagateOmm, propagatePreparedOmm, sampleDynamicOrbitPath, sampleOrbitSegment } from './lib/orbit';
 import type { ConjunctionRecord, OmmRecord, OrbitPath, PropagatedObject, ThreatObject } from './lib/types';
@@ -185,6 +185,8 @@ export default function OrbitGlobe({
   const pointerOriginRef = useRef<{ x: number; y: number } | null>(null);
   const followedTargetRef = useRef<THREE.Vector3 | null>(null);
   const positionedCameraKeyRef = useRef('');
+  const scaleBarRef = useRef<HTMLSpanElement>(null);
+  const scaleLabelRef = useRef<HTMLSpanElement>(null);
   const fallbackReplayFrameRef = useRef<TcaReplayFrame | null>(null);
   const activeReplayFrameRef = replayFrameRef ?? fallbackReplayFrameRef;
   const [size, setSize] = useState({ width: 900, height: 700 });
@@ -245,6 +247,31 @@ export default function OrbitGlobe({
   const pathDashLength = useCallback((path: object) => (path as OrbitPath).dashLength ?? 1, []);
   const pathDashGap = useCallback((path: object) => (path as OrbitPath).dashGap ?? 0, []);
   const pathDashAnimateTime = useCallback((path: object) => (path as OrbitPath).dashAnimateTime ?? 0, []);
+
+  const updateScaleBar = useCallback(() => {
+    const globe = globeRef.current;
+    const bar = scaleBarRef.current;
+    const readout = scaleLabelRef.current;
+    if (!globe || !bar || !readout) return;
+    const camera = globe.camera() as THREE.PerspectiveCamera;
+    const scale = scaleBarForView({
+      cameraDistance: camera.position.length(),
+      globeRadius: globe.getGlobeRadius(),
+      verticalFovDegrees: camera.fov,
+      viewportHeightPx: size.height,
+    });
+    if (!scale) return;
+    bar.style.width = `${scale.pixels}px`;
+    readout.textContent = `${scale.km.toLocaleString('en-IN')} km`;
+  }, [size.height]);
+
+  useEffect(() => {
+    if (!globeReady || !globeRef.current) return;
+    const controls = globeRef.current.controls();
+    updateScaleBar();
+    controls.addEventListener('change', updateScaleBar);
+    return () => controls.removeEventListener('change', updateScaleBar);
+  }, [globeReady, updateScaleBar]);
 
   const configureGlobe = useCallback(() => {
     if (!globeRef.current) return;
@@ -1106,6 +1133,11 @@ export default function OrbitGlobe({
         onGlobeReady={configureGlobe}
       />
       {!globeReady && <div className="globe-loading">Initializing WebGL Earth and SGP4 catalogue…</div>}
+      <div className="globe-scale" title="Rough distance across the middle of the view at the Earth's surface">
+        <span className="globe-scale-bar" ref={scaleBarRef} />
+        <span className="globe-scale-value" ref={scaleLabelRef}>&mdash;</span>
+        <small>approx</small>
+      </div>
       <div className="globe-attribution">Earth imagery: NASA Blue Marble Next Generation · 5.4K · Orbit data: CelesTrak · monitored-fleet fallback: SatNOGS DB</div>
     </div>
   );

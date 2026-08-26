@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ALTITUDE_SHELLS, EARTH_RADIUS_KM, shellRadius, subsolarPoint } from './globe-depth';
+import { ALTITUDE_SHELLS, EARTH_RADIUS_KM, scaleBarForView, shellRadius, subsolarPoint } from './globe-depth';
 
 describe('subsolar point', () => {
   it('places the Sun over the tropics and never outside them', () => {
@@ -51,5 +51,37 @@ describe('altitude shells', () => {
     const radii = ALTITUDE_SHELLS.map((shell) => shellRadius(100, shell.altitudeKm));
     expect(radii).toEqual([...radii].sort((a, b) => a - b));
     expect(new Set(radii).size).toBe(radii.length);
+  });
+});
+
+describe('approximate distance scale', () => {
+  const view = { globeRadius: 100, verticalFovDegrees: 50, viewportHeightPx: 800 };
+
+  it('keeps the bar inside a readable pixel range across a wide zoom sweep', () => {
+    for (const cameraDistance of [110, 140, 200, 320, 500, 900]) {
+      const bar = scaleBarForView({ ...view, cameraDistance })!;
+      expect(bar).not.toBeNull();
+      expect(bar.pixels).toBeGreaterThanOrEqual(40);
+      expect(bar.pixels).toBeLessThanOrEqual(200);
+    }
+  });
+
+  it('reports a longer distance as the camera pulls back', () => {
+    const near = scaleBarForView({ ...view, cameraDistance: 115 })!;
+    const far = scaleBarForView({ ...view, cameraDistance: 700 })!;
+    expect(far.km).toBeGreaterThan(near.km);
+  });
+
+  it('lands in the right order of magnitude for a full-disc view', () => {
+    // At roughly two Earth radii of standoff the visible span is continental.
+    const bar = scaleBarForView({ ...view, cameraDistance: 300 })!;
+    expect(bar.km).toBeGreaterThanOrEqual(500);
+    expect(bar.km).toBeLessThanOrEqual(5_000);
+  });
+
+  it('rejects a degenerate camera or viewport', () => {
+    expect(scaleBarForView({ ...view, cameraDistance: Number.NaN })).toBeNull();
+    expect(scaleBarForView({ ...view, cameraDistance: 200, viewportHeightPx: 0 })).toBeNull();
+    expect(scaleBarForView({ ...view, cameraDistance: 200, verticalFovDegrees: 0 })).toBeNull();
   });
 });
