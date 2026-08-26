@@ -1252,7 +1252,7 @@ details li,
 .ops-pathspace-legend span > u { display: block; margin-top: 3px; color: #6d818e; font-size: 7px; font-style: normal; text-decoration: none; line-height: 1.5; }
 .ops-pathspace-actions { display: flex; align-items: center; gap: 8px; }
 .ops-pathspace-framing { display: flex; overflow: hidden; border: 1px solid #2a3640; border-radius: 6px; }
-.ops-pathspace-framing button { width: auto; height: 30px; padding: 0 11px; border: 0; border-right: 1px solid #2a3640; border-radius: 0; color: #8195a3; font: 600 9px var(--font-geist-mono), monospace; background: transparent; cursor: pointer; }
+.ops-pathspace header .ops-pathspace-framing button { width: auto; min-width: 52px; height: 30px; padding: 0 11px; border: 0; border-right: 1px solid #2a3640; border-radius: 0; color: #8195a3; font: 600 9px var(--font-geist-mono), monospace; background: transparent; cursor: pointer; }
 .ops-pathspace-framing button:last-child { border-right: 0; }
 .ops-pathspace-framing button.active { color: #06121a; background: #4d9dff; }
 .ops-pathspace-static { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border: 1px solid #22303a; border-radius: 6px; background: #080c0f; }
