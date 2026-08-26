@@ -726,7 +726,7 @@ export default function OrbitGlobe({
       new THREE.LineBasicMaterial({
         color: MONITORED_SATELLITE_COLOR,
         transparent: true,
-        opacity: 0.28,
+        opacity: 0.5,
         depthWrite: false,
       }),
     );
