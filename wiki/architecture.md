@@ -47,11 +47,15 @@ retains only the newest queued time, which prevents replay requests from
 building a backlog. During follow, the camera uses the protected satellite's
 propagated forward direction to hold a visible chase position. A red screen-facing target and label mark the computed
 public-element midpoint at TCA. The target pulses during accelerated follow.
-Selecting a live ML alert loads missing public orbit records and starts the
-replay when both records are ready. Event paths use a bounded final twenty-minute
-window so repeated Earth-fixed ground tracks do not obscure the encounter. The
-protected path is solid red and the counterpart path is dashed red. Their first
-and last samples equal the displayed start time and TCA time.
+Selecting an alert requests the current two-object catalogue record even when
+the broad catalogue already contains both objects. The broad offline snapshot
+can be months older than a selected event, so the workspace compares epochs,
+keeps the newest record for each object, and waits for that merge before it
+starts the replay. The browser caps this refresh at 2.5 seconds, then falls
+back to the newest bundled element set. Event paths use a bounded final twenty-minute window so repeated
+Earth-fixed ground tracks do not obscure the encounter. The protected path is
+solid red and the counterpart path is dashed red. Their first and last samples
+equal the displayed start time and TCA time.
 
 A rough distance scale sits at the bottom left of the globe. `scaleBarForView`
 converts the camera height, the vertical field of view and the viewport height
@@ -144,11 +148,11 @@ the monitoring rail last.
 ## Public screening lane
 
 CelesTrak OMM records provide orbital elements for SGP4 context. A small
-timestamped SatNOGS DB fixture supplies fresher public TLE fallback records for
-five monitored objects and identifies Space-Track.org as its element source.
-The remaining monitored object retains the normal catalogue fallback when that
-feed has no current TLE. SOCRATES records provide the displayed public
-conjunction metrics. Transparent rules
+timestamped public fixture supplies fresher TLE fallback records for six
+monitored objects. Five came through SatNOGS DB with Space-Track.org attribution;
+ISTSAT-1 came from the CelesTrak GP endpoint. Other monitored objects retain the
+normal catalogue fallback when the fixture has no current TLE. SOCRATES records
+provide the displayed public conjunction metrics. Transparent rules
 assign Review, Watch, Low, or Needs data. Public geometry remains approximate,
 and the SOCRATES values remain authoritative for the event card.
 

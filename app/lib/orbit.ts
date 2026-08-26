@@ -20,6 +20,40 @@ export function catalogId(record: OmmRecord) {
   return Number(record.NORAD_CAT_ID);
 }
 
+function epochTime(record: OmmRecord) {
+  const raw = String(record.EPOCH ?? '').trim();
+  if (!raw) return null;
+  const timestamp = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+/**
+ * Keeps the newest element set while retaining catalogue metadata that a GP
+ * response may omit. TLE lines belong to their own epoch, so a newer OMM must
+ * clear older TLE fields or satellite.js would silently propagate the stale
+ * TLE instead of the selected record.
+ */
+export function preferFresherOmmRecord(current: OmmRecord | undefined, incoming: OmmRecord) {
+  if (!current) return incoming;
+  const currentEpoch = epochTime(current);
+  const incomingEpoch = epochTime(incoming);
+  if (incomingEpoch === null || (currentEpoch !== null && incomingEpoch < currentEpoch)) return current;
+  if (currentEpoch !== null && incomingEpoch === currentEpoch) {
+    const currentHasTle = Boolean(current.TLE_LINE1 && current.TLE_LINE2);
+    const incomingHasTle = Boolean(incoming.TLE_LINE1 && incoming.TLE_LINE2);
+    if (currentHasTle && !incomingHasTle) return current;
+  }
+  return {
+    ...current,
+    ...incoming,
+    OBJECT_TYPE: incoming.OBJECT_TYPE ?? current.OBJECT_TYPE,
+    COUNTRY_CODE: incoming.COUNTRY_CODE ?? current.COUNTRY_CODE,
+    LAUNCH_DATE: incoming.LAUNCH_DATE ?? current.LAUNCH_DATE,
+    TLE_LINE1: incoming.TLE_LINE1,
+    TLE_LINE2: incoming.TLE_LINE2,
+  };
+}
+
 export function prepareOmm(record: OmmRecord): PreparedOmm | null {
   try {
     const satrec = record.TLE_LINE1 && record.TLE_LINE2

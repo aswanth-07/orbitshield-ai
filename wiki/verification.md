@@ -33,6 +33,12 @@ primary ML alert, runs the TCA replay, opens the advisory manoeuvre study, and
 confirms that the green HCW preview never invents post-manoeuvre probability.
 Record console errors and a replay frame-rate sample for the primary laptop.
 
+The ISTSAT-1 mission-alert regression check selects the Cartosat-2F event,
+waits for the selected-pair orbit refresh, and verifies that the replay ends at
+27 Aug 2026, 06:29:25 IST. The protected marker, counterpart marker, and TCA
+target must occupy the same Earth-scale region. The magnified overlay must
+identify Cartosat-2F as a satellite and preserve the SOCRATES 0.973 km range.
+
 ## Model checks
 
 Use the repository environment instead of a global Python installation:

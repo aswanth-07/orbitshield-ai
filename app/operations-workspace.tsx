@@ -25,13 +25,14 @@ import {
   sanitizeManeuverAssumptions, type ManeuverAssumptions,
   type ManeuverCandidate, type ManeuverStudy,
 } from './lib/maneuver';
+import { preferFresherOmmRecord } from './lib/orbit';
 import { PUBLIC_TRIAGE_MODEL, scorePublicConjunction } from './lib/public-triage';
 import { comparePriority, formatProbability } from './lib/screening';
 import { advanceSimulationTime, formatIst } from './lib/time';
 import type { OrbitCameraMode } from './orbit-globe';
 import type {
   CatalogResponse, ConjunctionRecord, ConjunctionResponse, OmmRecord,
-  FleetObject, ScreeningPriority, ThreatObject, ThreatResponse,
+  DataStatus, FleetObject, ScreeningPriority, ThreatObject, ThreatResponse,
 } from './lib/types';
 
 const OrbitGlobe = dynamic(() => import('./orbit-globe'), {
@@ -48,6 +49,7 @@ const fleetOrbitSnapshot = fleetOrbitFixture as {
 };
 const defaultFleetIds = INDIA_EO_FLEET.objects.map((item) => item.catalogId);
 const MONITORING_STORAGE_KEY = 'orbitshield.monitoring-list.v4';
+const SELECTED_PAIR_FETCH_TIMEOUT_MS = 2_500;
 const priorityLabels: Record<ScreeningPriority, string> = {
   review: 'Review', watch: 'Watch', low: 'Low', 'needs-data': 'Needs data',
 };
@@ -84,14 +86,21 @@ function counterpartFor(event: ConjunctionRecord, protectedId: number) {
     : { id: event.primaryCatalogId, name: event.primaryName };
 }
 
-function EncounterOverlay({ event, protectedId, threat, maneuverCandidate }: {
+function EncounterOverlay({ event, protectedId, threat, counterpartRecord, counterpartMonitored, maneuverCandidate }: {
   event: ConjunctionRecord;
   protectedId: number;
   threat?: ThreatObject;
+  counterpartRecord?: OmmRecord | null;
+  counterpartMonitored: boolean;
   maneuverCandidate?: ManeuverCandidate | null;
 }) {
   const counterpart = counterpartFor(event, protectedId);
-  const type = threat?.objectType === 'R/B' ? 'ROCKET BODY' : isSatelliteObjectType(threat?.objectType) ? 'SATELLITE' : 'DEBRIS';
+  const counterpartType = threat?.objectType ?? counterpartRecord?.OBJECT_TYPE;
+  const type = counterpartType === 'R/B'
+    ? 'ROCKET BODY'
+    : counterpartMonitored || isSatelliteObjectType(counterpartType)
+      ? 'SATELLITE'
+      : 'DEBRIS';
   const baselineRatio = maneuverCandidate && event.rangeKm
     ? Math.min(100, Math.max(4, event.rangeKm / maneuverCandidate.separationAtSourceTcaKm * 100))
     : 100;
@@ -308,6 +317,7 @@ export default function OperationsWorkspace() {
   const [fleetSearch, setFleetSearch] = useState('');
   const [selectedManeuverCandidate, setSelectedManeuverCandidate] = useState<ManeuverCandidate | null>(null);
   const [selectedMissionFocusId, setSelectedMissionFocusId] = useState<string | null>(null);
+  const [selectedPairStatus, setSelectedPairStatus] = useState<DataStatus | null>(null);
   const simulationRef = useRef(0);
   const lastTick = useRef(0);
   const replayCancel = useRef<(() => void) | null>(null);
@@ -315,6 +325,7 @@ export default function OperationsWorkspace() {
   const replayPhaseRef = useRef<TcaReplayPhase | null>(null);
   const replayClockValueRef = useRef<HTMLElement | null>(null);
   const lastReplayClockPaintRef = useRef(0);
+  const eventSelectionRequestRef = useRef(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -487,12 +498,14 @@ export default function OperationsWorkspace() {
     missionFocus = false,
     preferredProtectedId?: number,
   ) => {
+    const selectionRequest = ++eventSelectionRequestRef.current;
     replayCancel.current?.();
     replayCancel.current = null;
     setReplayActive(false);
     setReplayPhase(null);
     setSelectedMlAlertId(modelAlert ? event.id : null);
     setSelectedMissionFocusId(missionFocus ? event.id : null);
+    setSelectedPairStatus(null);
     setSelectedManeuverCandidate(null);
     setCatalogueVisible(false);
     const protectedId = preferredProtectedId ?? chooseProtectedId(event);
@@ -505,20 +518,34 @@ export default function OperationsWorkspace() {
     setPlaying(false);
     setSelectedEventId(event.id);
     setSelectedSatelliteId(protectedId);
-    setPendingGlobeReplayId(startReplay ? event.id : null);
+    setPendingGlobeReplayId(null);
     setCameraMode('pair-follow');
     setCameraResetKey((value) => value + 1);
     const ids = [event.primaryCatalogId, event.secondaryCatalogId];
-    if (ids.every((id) => recordMap.has(id))) return;
     try {
-      const response = await fetch(`/api/catalog?catnr=${ids.join(',')}`).then((result) => result.json() as Promise<CatalogResponse>);
+      const result = await fetch(`/api/catalog?catnr=${ids.join(',')}`, {
+        signal: AbortSignal.timeout(SELECTED_PAIR_FETCH_TIMEOUT_MS),
+      });
+      if (!result.ok) throw new Error(`Selected-pair catalogue request failed with HTTP ${result.status}`);
+      const response = await result.json() as CatalogResponse;
+      if (eventSelectionRequestRef.current !== selectionRequest) return;
+      setSelectedPairStatus(response.status);
       setExtraRecords((current) => {
         const merged = new Map(current.map((record) => [Number(record.NORAD_CAT_ID), record]));
-        response.objects.forEach((record) => merged.set(Number(record.NORAD_CAT_ID), record));
+        response.objects.forEach((record) => {
+          const id = Number(record.NORAD_CAT_ID);
+          merged.set(id, preferFresherOmmRecord(merged.get(id) ?? recordMap.get(id), record));
+        });
         return [...merged.values()];
       });
     } catch {
       // Event metrics remain useful when current public geometry is unavailable.
+    } finally {
+      if (startReplay && eventSelectionRequestRef.current === selectionRequest) {
+        window.requestAnimationFrame(() => {
+          if (eventSelectionRequestRef.current === selectionRequest) setPendingGlobeReplayId(event.id);
+        });
+      }
     }
   }, [chooseProtectedId, recordMap]);
 
@@ -633,10 +660,12 @@ export default function OperationsWorkspace() {
   useEffect(() => () => replayCancel.current?.(), []);
 
   function selectObject(catalogId: number) {
+    eventSelectionRequestRef.current += 1;
     cancelReplay();
     setPendingGlobeReplayId(null);
     setSelectedMlAlertId(null);
     setSelectedMissionFocusId(null);
+    setSelectedPairStatus(null);
     setSelectedManeuverCandidate(null);
     setSelectedEventId(null);
     setTrajectoryStartTime(null);
@@ -658,10 +687,12 @@ export default function OperationsWorkspace() {
   function removeMonitoredSatellite(catalogId: number) {
     setMonitoredIds((current) => current.filter((id) => id !== catalogId));
     if (selectedEvent && (selectedEvent.primaryCatalogId === catalogId || selectedEvent.secondaryCatalogId === catalogId)) {
+      eventSelectionRequestRef.current += 1;
       cancelReplay();
       setSelectedEventId(null);
       setSelectedMlAlertId(null);
       setSelectedMissionFocusId(null);
+      setSelectedPairStatus(null);
       setSelectedManeuverCandidate(null);
       setTrajectoryStartTime(null);
     }
@@ -673,12 +704,14 @@ export default function OperationsWorkspace() {
   }
 
   function returnLive() {
+    eventSelectionRequestRef.current += 1;
     cancelReplay();
     setPendingGlobeReplayId(null);
     const now = Date.now();
     setSelectedEventId(null);
     setSelectedMlAlertId(null);
     setSelectedMissionFocusId(null);
+    setSelectedPairStatus(null);
     setSelectedManeuverCandidate(null);
     setTrajectoryStartTime(null);
     setCatalogueVisible(true);
@@ -851,11 +884,18 @@ export default function OperationsWorkspace() {
         <div className="ops-globe-status">
           <span className={feedTone}><i /> {feedLabel}</span>
           <strong>{selectedEvent ? `${cleanName(selectedEvent.primaryName)} ↔ ${cleanName(selectedEvent.secondaryName)}` : selectedObjectName ?? 'Fleet overview'}</strong>
-          <small>{selectedEvent ? `${priorityLabels[selectedEvent.priority]} screening candidate · TCA ${formatIst(selectedEvent.tca, { seconds: true })}` : selectedRecord ? `${monitoredIdSet.has(Number(selectedRecord.NORAD_CAT_ID)) ? 'Monitored' : 'Catalogue'} satellite · NORAD ${selectedRecord.NORAD_CAT_ID}` : 'Select a satellite, screening candidate or ML alert'} · Orbit elements {catalog?.status ?? 'loading'}</small>
+          <small>{selectedEvent ? `${priorityLabels[selectedEvent.priority]} screening candidate · TCA ${formatIst(selectedEvent.tca, { seconds: true })}` : selectedRecord ? `${monitoredIdSet.has(Number(selectedRecord.NORAD_CAT_ID)) ? 'Monitored' : 'Catalogue'} satellite · NORAD ${selectedRecord.NORAD_CAT_ID}` : 'Select a satellite, screening candidate or ML alert'} · Orbit elements {selectedEvent ? selectedPairStatus ?? catalog?.status ?? 'loading' : catalog?.status ?? 'loading'}</small>
         </div>
         <div className="ops-layer-legend"><span><i className="catalog" /> Catalogue satellites</span><span><i className="sat" /> Monitored satellites</span><span><i className="debris" /> Screened debris</span><span><i className="orbit" /> Monitored orbits</span></div>
         {selectedEvent && <div className="ops-event-orbit-legend"><span><i className="protected" /> Protected SGP4 approach track</span><span><i className="counterpart" /> Counterpart SGP4 approach track</span>{selectedManeuverCandidate && <span><i className="maneuver" /> Suggested SGP4 + RTN path</span>}<span><i className="tca-target" /> Closest approach</span></div>}
-        {selectedEvent && selectedProtectedId && replayPhase === 'encounter' && <EncounterOverlay event={selectedEvent} protectedId={selectedProtectedId} threat={selectedThreat} maneuverCandidate={selectedManeuverCandidate} />}
+        {selectedEvent && selectedProtectedId && replayPhase === 'encounter' && <EncounterOverlay
+          event={selectedEvent}
+          protectedId={selectedProtectedId}
+          threat={selectedThreat}
+          counterpartRecord={selectedCounterpartRecord}
+          counterpartMonitored={Boolean(selectedCounterpart && monitoredIdSet.has(selectedCounterpart.id))}
+          maneuverCandidate={selectedManeuverCandidate}
+        />}
         <div className="ops-globe-controls">
           <div className="ops-time-control"><button disabled={replayActive} onClick={() => setPlaying((value) => !value)} aria-label={playing ? 'Pause orbital animation' : 'Play orbital animation'}>{playing ? <Pause size={14} /> : <Play size={14} />}</button><span><b>{replayActive ? 'REPLAY TIME' : 'SIMULATION TIME'}</b><em ref={replayClockValueRef}>{formatIst(simulationTime, { seconds: true })}</em></span></div>
           <div className="ops-camera-control"><button aria-pressed={cameraMode === 'global'} className={cameraMode === 'global' ? 'active' : ''} onClick={() => { setCameraMode('global'); setCameraResetKey((value) => value + 1); }}><RotateCcw size={13} /> Globe</button><button aria-pressed={cameraMode === 'follow' || cameraMode === 'pair-follow'} className={cameraMode === 'follow' || cameraMode === 'pair-follow' ? 'active' : ''} onClick={() => { setCameraMode(selectedEvent ? 'pair-follow' : 'follow'); setCameraResetKey((value) => value + 1); }} disabled={!selectedSatelliteId}><LocateFixed size={13} /> Track</button><button aria-pressed={cameraMode === 'free'} className={cameraMode === 'free' ? 'active' : ''} onClick={() => { setCameraMode('free'); setCameraResetKey((value) => value + 1); }}><Eye size={13} /> Free 3D</button><button aria-pressed={catalogueVisible} className={catalogueVisible ? 'active' : ''} onClick={() => setCatalogueVisible((value) => !value)}><CircleDot size={13} /> Context</button></div>

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { propagateOmm, sampleClosedOrbitPath, sampleDynamicOrbitPath, sampleOrbitSegment } from './orbit';
+import activeCatalogFixture from '../data/active-catalog.snapshot.json';
+import fleetOrbitFixture from '../data/fleet-orbits.snapshot.json';
+import socratesFixture from '../data/socrates-fleet.snapshot.json';
+import {
+  preferFresherOmmRecord, propagateOmm, relativeRtnFromOmm, sampleClosedOrbitPath,
+  sampleDynamicOrbitPath, sampleOrbitSegment,
+} from './orbit';
 import type { OmmRecord } from './types';
 
 const record: OmmRecord = {
@@ -84,5 +90,63 @@ describe('future orbit segment sampling', () => {
     expect(point?.catalogId).toBe(44804);
     expect(point?.altitudeKm).toBeGreaterThan(300);
     expect(point?.altitudeKm).toBeLessThan(1_000);
+  });
+
+  it('replaces a stale fallback with a newer selected-pair OMM', () => {
+    const stale = {
+      ...record,
+      EPOCH: '2026-03-26T10:53:58.905600',
+      TLE_LINE1: 'old line 1',
+      TLE_LINE2: 'old line 2',
+      COUNTRY_CODE: 'IND',
+    };
+    const current = {
+      ...record,
+      EPOCH: '2026-08-25T16:35:12.553728',
+      MEAN_ANOMALY: 215.4747,
+      TLE_LINE1: undefined,
+      TLE_LINE2: undefined,
+      COUNTRY_CODE: undefined,
+    };
+    const selected = preferFresherOmmRecord(stale, current);
+
+    expect(selected.EPOCH).toBe(current.EPOCH);
+    expect(selected.MEAN_ANOMALY).toBe(current.MEAN_ANOMALY);
+    expect(selected.COUNTRY_CODE).toBe('IND');
+    expect(selected.TLE_LINE1).toBeUndefined();
+    expect(selected.TLE_LINE2).toBeUndefined();
+  });
+
+  it('does not let an offline fallback replace a fresher bundled orbit', () => {
+    const bundled = { ...record, EPOCH: '2026-08-25T16:35:12.553728Z' };
+    const fallback = { ...record, EPOCH: '2026-03-26T10:53:58.905600' };
+
+    expect(preferFresherOmmRecord(bundled, fallback)).toBe(bundled);
+  });
+
+  it('keeps the offline ISTSAT-1 replay near its published TCA region', () => {
+    const event = socratesFixture.events.find((candidate) => (
+      candidate.primaryCatalogId === 60238 || candidate.secondaryCatalogId === 60238
+    ));
+    const records = new Map((activeCatalogFixture.objects as OmmRecord[]).map((item) => [Number(item.NORAD_CAT_ID), item]));
+    for (const orbit of fleetOrbitFixture.objects) {
+      const current = records.get(orbit.catalogId);
+      if (!current) continue;
+      records.set(orbit.catalogId, {
+        ...current,
+        EPOCH: orbit.epoch,
+        TLE_LINE1: orbit.tleLine1,
+        TLE_LINE2: orbit.tleLine2,
+      });
+    }
+
+    expect(event).toBeDefined();
+    const geometry = relativeRtnFromOmm(
+      records.get(60238)!,
+      records.get(43111)!,
+      new Date(event!.tca),
+    );
+    expect(geometry).not.toBeNull();
+    expect(geometry!.distanceKm).toBeLessThan(50);
   });
 });

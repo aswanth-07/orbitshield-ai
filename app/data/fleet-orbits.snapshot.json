@@ -1,8 +1,8 @@
 {
-  "source": "SatNOGS DB TLE API",
-  "upstream": "https://db.satnogs.org/api/tle/",
-  "elementSource": "Space-Track.org",
-  "fetchedAt": "2026-08-25T01:07:55+05:30",
+  "source": "Timestamped public TLE snapshot",
+  "upstream": "https://db.satnogs.org/api/tle/ and https://celestrak.org/NORAD/elements/gp.php",
+  "elementSource": "Space-Track.org and CelesTrak GP",
+  "fetchedAt": "2026-08-26T10:24:00+05:30",
   "objects": [
     {
       "catalogId": 41877,
@@ -33,6 +33,12 @@
       "epoch": "2026-08-24T13:42:57.376Z",
       "tleLine1": "1 37387U 11015A   26236.57149741  .00000049  00000-0  42403-4 0  9993",
       "tleLine2": "2 37387  98.7593 303.5220 0012248  63.8038 296.4397 14.21606406795899"
+    },
+    {
+      "catalogId": 60238,
+      "epoch": "2026-08-25T16:35:12.553728Z",
+      "tleLine1": "1 60238U 24128D   26237.69111752  .00005360  00000+0  31724-3 0  9991",
+      "tleLine2": "2 60238  61.9895 320.2323 0028223 144.8219 215.4747 15.12375401116973"
     }
   ]
 }
