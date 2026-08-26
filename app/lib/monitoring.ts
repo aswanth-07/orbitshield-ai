@@ -1,11 +1,21 @@
 import { isSatelliteObjectType } from './collision-visualization';
 import { comparePriority } from './screening';
-import type { ConjunctionRecord, ThreatObject } from './types';
+import type { ConjunctionRecord, DataStatus, ThreatObject } from './types';
 
 export type MonitoredState = {
   label: 'Review' | 'Watch' | 'Low' | 'Needs data' | 'Clear' | 'Connector needed';
   tone: 'review' | 'watch' | 'low' | 'needs-data' | 'clear';
 };
+
+export function publicFeedPresentation(status: DataStatus | null, refreshing: boolean, refreshFailed: boolean, source = '') {
+  if (refreshing) return { tone: 'refreshing', label: 'UPDATING PUBLIC FEED' } as const;
+  if (!refreshFailed && status === 'cached' && source === 'CelesTrak SOCRATES current run') {
+    return { tone: 'current', label: 'SYNCED SOCRATES RUN' } as const;
+  }
+  if (refreshFailed || status === 'cached') return { tone: 'cached', label: 'LATEST AVAILABLE PUBLIC DATA' } as const;
+  if (status === 'current') return { tone: 'current', label: 'CURRENT SOCRATES RUN' } as const;
+  return { tone: 'unavailable', label: 'PUBLIC FEED UNAVAILABLE' } as const;
+}
 
 export function eventForSatellite(events: ConjunctionRecord[], catalogId: number) {
   return events

@@ -1,6 +1,6 @@
 ---
 title: OrbitShield Architecture
-updated: 2026-08-25
+updated: 2026-08-26
 status: active
 ---
 
@@ -27,6 +27,12 @@ The centre keeps the active catalogue, screened debris, monitored
 orbits and TCA replay in one WebGL scene. The right rail renders either a
 selected object's verified profile, a public candidate review, or the live
 model state.
+
+The monitoring rail has one vertical scrollbar. Fleet controls, the primary
+model alert, the mission focus and eight public screening candidates therefore
+remain in one predictable reading order instead of trapping the candidate queue
+inside a short nested scroller. A compact source strip reports the current,
+synchronized or latest-available run and lets the operator request a refresh.
 
 The right rail shows one compact Current Model section only after event
 selection. The full ESA five-model comparison remains committed as research
@@ -155,6 +161,16 @@ normal catalogue fallback when the fixture has no current TLE. SOCRATES records
 provide the displayed public conjunction metrics. Transparent rules
 assign Review, Watch, Low, or Needs data. Public geometry remains approximate,
 and the SOCRATES values remain authoritative for the event card.
+
+The browser loads the bundled screening response immediately, then requests the
+current SOCRATES run in the background. The upstream run is about 16 MB, so its
+download receives a dedicated 45-second allowance while the smaller catalogue
+requests retain their 15-second limit. The CSV is parsed once for both the
+fleet events and total run count. The live route is not browser-cached; server
+and edge caches still prevent repeated upstream downloads across the roughly
+10.5-hour SOCRATES update cycle. A current run served from that synchronized
+cache remains identified by its source timestamp instead of being called a
+generic fallback.
 
 The overview uses a bundled timestamped threat fixture instead of issuing one
 CelesTrak request per counterpart. Selecting an event requests only that pair's

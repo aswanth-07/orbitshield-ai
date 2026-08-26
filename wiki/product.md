@@ -1,6 +1,6 @@
 ---
 title: OrbitShield Product Direction
-updated: 2026-08-25
+updated: 2026-08-26
 status: active
 ---
 
@@ -14,9 +14,10 @@ turns only elevated results into analyst alerts with an evidence brief.
 ## Judge workflow
 
 1. The application opens with automatic source refresh, green public-catalogue
-   satellites, six blue monitored satellites and orbits, one primary ML review
-   alert, and a separate public candidate queue. The workspace shows four
-   public candidates instead of filling the rail with the full queue.
+   satellites, the selected blue monitoring fleet and its orbits, one primary
+   ML review alert, and a separate public candidate queue. The rail shows eight
+   ranked public candidates and uses one scrollbar for the complete monitoring
+   workflow.
 2. The model rescans complete loaded events inside 48 hours every minute. A
    named event appears under ML Review Alert only after its score crosses the
    stored threshold. The primary demo alert favors a 24 to 48 hour planning

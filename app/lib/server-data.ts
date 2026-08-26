@@ -24,6 +24,8 @@ const SOCRATES_DIRECTORY_URL = 'https://celestrak.org/SOCRATES/jsonDir.php';
 const TWO_HOURS = 2 * 60 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
 const SOCRATES_CYCLE = 10.5 * 60 * 60 * 1000;
+const DEFAULT_FETCH_TIMEOUT_MS = 15_000;
+const SOCRATES_RUN_FETCH_TIMEOUT_MS = 45_000;
 const EDGE_CACHE_ORIGIN = 'https://orbitshield-cache.local/';
 
 type CacheEntry<T> = { value: T; expiresAt: number };
@@ -106,13 +108,13 @@ function markEdgeCached<T extends CatalogResponse | ConjunctionResponse>(value: 
   };
 }
 
-function fetchOptions(): RequestInit {
+function fetchOptions(timeoutMs = DEFAULT_FETCH_TIMEOUT_MS): RequestInit {
   return {
     headers: {
       Accept: 'application/json,text/csv;q=0.9,*/*;q=0.8',
       'User-Agent': USER_AGENT,
     },
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(timeoutMs),
   };
 }
 
@@ -235,13 +237,17 @@ function normalizeSocratesRows(rows: Record<string, string>[], now = new Date())
   });
 }
 
-export function parseSocratesCsv(csv: string, now = new Date()) {
+function parseSocratesRunCsv(csv: string, now = new Date()) {
   const result = Papa.parse<Record<string, string>>(csv, {
     header: true,
     skipEmptyLines: true,
     dynamicTyping: false,
   });
-  return normalizeSocratesRows(result.data, now);
+  return { events: normalizeSocratesRows(result.data, now), rowCount: result.data.length };
+}
+
+export function parseSocratesCsv(csv: string, now = new Date()) {
+  return parseSocratesRunCsv(csv, now).events;
 }
 
 function fallbackConjunctions(now = new Date()): ConjunctionResponse {
@@ -277,10 +283,11 @@ export async function getConjunctions(): Promise<ConjunctionResponse> {
     const directory = Array.isArray(directoryJson) ? directoryJson[0] : directoryJson;
     if (!directory?.FILE_NAME) throw new Error('SOCRATES directory did not name a run file');
     const source = `https://celestrak.org/SOCRATES/${directory.FILE_NAME}`;
-    const runResponse = await fetch(source, { ...fetchOptions(), headers: { ...fetchOptions().headers, Accept: 'application/octet-stream,text/csv;q=0.9,*/*;q=0.8' } });
+    const runOptions = fetchOptions(SOCRATES_RUN_FETCH_TIMEOUT_MS);
+    const runResponse = await fetch(source, { ...runOptions, headers: { ...runOptions.headers, Accept: 'application/octet-stream,text/csv;q=0.9,*/*;q=0.8' } });
     if (!runResponse.ok) throw new Error(`SOCRATES run returned HTTP ${runResponse.status}`);
     const csv = await runResponse.text();
-    const events = parseSocratesCsv(csv, new Date());
+    const { events, rowCount } = parseSocratesRunCsv(csv, new Date());
     if (!events.length) throw new Error('SOCRATES run contained no usable monitored-fleet rows');
     const fallback = socratesSnapshot as SnapshotSocrates;
     const value: ConjunctionResponse = {
@@ -291,7 +298,7 @@ export async function getConjunctions(): Promise<ConjunctionResponse> {
       run: {
         ...fallback.run,
         currentAsOf: directory.FILE_MTIME ?? fallback.run.currentAsOf,
-        conjunctionCount: Papa.parse(csv, { header: true, skipEmptyLines: true }).data.length,
+        conjunctionCount: rowCount,
       },
       screenedCatalogIds: [...INDIA_EO_IDS],
       events,

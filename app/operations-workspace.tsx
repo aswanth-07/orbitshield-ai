@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import {
   Activity, AlertTriangle, Bot, CircleDot, Clock3,
   Crosshair, Database, Eye, Fuel, LocateFixed, Lock, Pause, Play, Plus,
-  Boxes, Radar, RotateCcw, Route, Satellite, Search, Settings2, ShieldCheck,
+  Boxes, Radar, RefreshCw, RotateCcw, Route, Satellite, Search, Settings2, ShieldCheck,
   Sparkles, TriangleAlert, X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -18,7 +18,7 @@ import { explainConjunction } from './lib/explanations';
 import { INDIA_EO_FLEET } from './lib/fleet';
 import {
   eventForSatellite, eventTouchesMonitoringList, monitoredState,
-  isFutureConjunction, normalizeMonitoringIds, priorityReason,
+  isFutureConjunction, normalizeMonitoringIds, priorityReason, publicFeedPresentation,
 } from './lib/monitoring';
 import {
   buildManeuverStudy, DEFAULT_MANEUVER_ASSUMPTIONS, leadTimeCostCurve, MAX_ADVISORY_DELTA_V_MPS,
@@ -296,6 +296,7 @@ export default function OperationsWorkspace() {
   const [conjunctions, setConjunctions] = useState<ConjunctionResponse | null>(null);
   const [threats, setThreats] = useState<ThreatResponse | null>(null);
   const [liveRefreshFailed, setLiveRefreshFailed] = useState(false);
+  const [liveRefreshing, setLiveRefreshing] = useState(false);
   const [extraRecords, setExtraRecords] = useState<OmmRecord[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedSatelliteId, setSelectedSatelliteId] = useState<number | null>(null);
@@ -365,8 +366,9 @@ export default function OperationsWorkspace() {
   }, [monitoredIds, monitoringReady]);
 
   const refreshLive = useCallback(async () => {
+    setLiveRefreshing(true);
     try {
-      const result = await fetch('/api/live');
+      const result = await fetch('/api/live', { cache: 'no-store' });
       if (!result.ok) throw new Error(`Live refresh failed with HTTP ${result.status}`);
       const response = await result.json() as {
         conjunctions: ConjunctionResponse;
@@ -379,6 +381,8 @@ export default function OperationsWorkspace() {
     } catch {
       setLiveRefreshFailed(true);
       // Keep the last current or cached monitoring snapshot available.
+    } finally {
+      setLiveRefreshing(false);
     }
   }, []);
 
@@ -766,7 +770,7 @@ export default function OperationsWorkspace() {
   [rankedEvents, triageMinute]);
   const monitoredEvents = (namedEvents.length >= 6 ? namedEvents : rankedEvents)
     .filter((event) => event.id !== primaryMlAlert?.event.id)
-    .slice(0, 4);
+    .slice(0, 8);
   const primaryMlProtectedId = primaryMlAlert ? chooseProtectedId(primaryMlAlert.event) : null;
   const primaryMlCounterpart = primaryMlAlert && primaryMlProtectedId ? counterpartFor(primaryMlAlert.event, primaryMlProtectedId) : null;
   const primaryMlProtectedName = primaryMlAlert && primaryMlProtectedId
@@ -783,19 +787,21 @@ export default function OperationsWorkspace() {
     : null;
   const selectedProtectedRecord = selectedEvent && selectedProtectedId ? recordMap.get(selectedProtectedId) : null;
   const selectedCounterpartRecord = selectedCounterpart ? recordMap.get(selectedCounterpart.id) : null;
-  const feedTone = liveRefreshFailed ? 'cached' : conjunctions?.status ?? 'unavailable';
-  const feedLabel = liveRefreshFailed
-    ? 'LAST SUCCESSFUL FEED'
-    : conjunctions?.status === 'current'
-    ? 'CURRENT PUBLIC FEED'
-    : conjunctions?.status === 'cached'
-      ? 'CACHED DEMO FEED'
-      : 'PUBLIC FEED UNAVAILABLE';
+  const { tone: feedTone, label: feedLabel } = publicFeedPresentation(
+    conjunctions?.status ?? null,
+    liveRefreshing,
+    liveRefreshFailed,
+    conjunctions?.source,
+  );
 
   return <main className="ops-shell">
     <section className="ops-workspace">
       <aside className="ops-monitor-rail" aria-label="Monitoring fleet and conjunction queues">
         <div className="ops-panel-heading"><div><span>MONITORING FLEET</span><strong>Selected satellites</strong></div><div className="ops-panel-actions"><b><Activity size={12} /> {monitoredIds.length} MONITORED</b><button aria-label="Manage monitoring list" aria-expanded={fleetManagerOpen} aria-controls="monitoring-list-manager" className={fleetManagerOpen ? 'active' : ''} onClick={() => setFleetManagerOpen((value) => !value)}><Plus size={13} /></button></div></div>
+        <div className={`ops-feed-status ${feedTone}`} aria-live="polite">
+          <span><CircleDot size={11} /><strong>{feedLabel}</strong><small>{conjunctions?.sourceUpdatedAt ? formatIst(conjunctions.sourceUpdatedAt, { seconds: true, year: true }) : 'Awaiting source timestamp'}</small></span>
+          <button disabled={liveRefreshing} onClick={() => void refreshLive()} aria-label="Refresh public screening feed"><RefreshCw size={12} /> Refresh</button>
+        </div>
         {fleetManagerOpen && <div className="ops-fleet-manager" id="monitoring-list-manager">
           <div><Search size={13} /><input aria-label="Search active satellites to monitor" autoFocus value={fleetSearch} onChange={(event) => setFleetSearch(event.target.value)} placeholder="Satellite name or NORAD id" /><button aria-label="Close monitoring manager" onClick={() => setFleetManagerOpen(false)}><X size={12} /></button></div>
           <p>Add an active payload to this device-local list. Orbit context is immediate; conjunction coverage for new assets requires a configured screening or CDM connector.</p>
@@ -853,7 +859,6 @@ export default function OperationsWorkspace() {
             </button>;
           })}
         </div>
-        <div className={`ops-rail-footer ${feedTone}`} aria-live="polite"><CircleDot size={12} /><span><strong>{feedLabel}</strong><small>{conjunctions?.sourceUpdatedAt ? `Source timestamp ${formatIst(conjunctions.sourceUpdatedAt, { seconds: true, year: true })}. ` : ''}The model rescans the loaded future events every minute.</small></span></div>
       </aside>
 
       <section className="ops-globe-stage">

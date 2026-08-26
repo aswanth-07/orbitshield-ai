@@ -1,6 +1,6 @@
 ---
 title: OrbitShield Verification
-updated: 2026-08-25
+updated: 2026-08-26
 status: active
 ---
 
@@ -26,6 +26,12 @@ UI changes also require browser verification at 1707x1067, 1366x768, and a
 narrow mobile viewport. Exercise the complete judge path, inspect the console,
 confirm the cached fallback remains usable, and verify the TCA replay reaches
 the exact event time after follow, acquire, and encounter phases.
+
+The public-feed regression check confirms that the initial bundled response is
+usable immediately, the background live route can replace it with the current
+SOCRATES run, and the refresh control cannot be satisfied by a stale browser
+response. The monitoring rail must own the vertical scrollbar, expose eight
+candidate cards, and avoid a second scrollbar inside the candidate list.
 
 The monitoring workflow check adds an active catalogue payload, confirms that
 it persists locally with Connector needed, removes or resets it, selects the

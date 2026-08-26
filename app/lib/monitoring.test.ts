@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   eventForSatellite, eventTouchesMonitoringList, highestFleetDebrisAlert,
-  isFutureConjunction, monitoredState, normalizeMonitoringIds,
+  isFutureConjunction, monitoredState, normalizeMonitoringIds, publicFeedPresentation,
 } from './monitoring';
 import type { ConjunctionRecord, ThreatObject } from './types';
 
@@ -91,5 +91,12 @@ describe('automated monitoring selection', () => {
     const record = event({ tca: '2026-08-25T00:00:00.000Z' });
     expect(isFutureConjunction(record, new Date('2026-08-24T23:59:59.000Z').getTime())).toBe(true);
     expect(isFutureConjunction(record, new Date('2026-08-25T00:00:01.000Z').getTime())).toBe(false);
+  });
+
+  it('distinguishes a current run from an honest latest-available fallback', () => {
+    expect(publicFeedPresentation('current', false, false)).toEqual({ tone: 'current', label: 'CURRENT SOCRATES RUN' });
+    expect(publicFeedPresentation('cached', false, false)).toEqual({ tone: 'cached', label: 'LATEST AVAILABLE PUBLIC DATA' });
+    expect(publicFeedPresentation('cached', false, false, 'CelesTrak SOCRATES current run')).toEqual({ tone: 'current', label: 'SYNCED SOCRATES RUN' });
+    expect(publicFeedPresentation('current', true, false)).toEqual({ tone: 'refreshing', label: 'UPDATING PUBLIC FEED' });
   });
 });
