@@ -21,7 +21,7 @@ import {
   isFutureConjunction, normalizeMonitoringIds, priorityReason,
 } from './lib/monitoring';
 import {
-  buildManeuverStudy, DEFAULT_MANEUVER_ASSUMPTIONS, leadTimeCostCurve,
+  buildManeuverStudy, DEFAULT_MANEUVER_ASSUMPTIONS, leadTimeCostCurve, MAX_ADVISORY_DELTA_V_MPS,
   sanitizeManeuverAssumptions, type ManeuverAssumptions,
   type ManeuverCandidate, type ManeuverStudy,
 } from './lib/maneuver';
@@ -243,12 +243,13 @@ function ManeuverStudyPanel({
             </span>
           </div>
           <details className="ops-study-disclosure"><summary>Cost of waiting, by decision time</summary><div className="ops-study-cost-curve">
-            {costCurve.map((point) => <div key={point.leadHours} className={`ops-cost-row ${point.leadHours === selectedCandidate.leadHours ? 'current' : ''}`}>
+            {costCurve.map((point) => <div key={point.leadHours} className={`ops-cost-row ${point.leadHours === selectedCandidate.leadHours ? 'current' : ''} ${point.withinTestedRange ? '' : 'beyond'}`}>
               <b>T&minus;{point.leadHours} h</b>
               <span className="bar"><i style={{ width: `${Math.max(3, heaviestPropellantGrams ? point.propellantGrams / heaviestPropellantGrams * 100 : 0)}%` }} /></span>
               <em>{(point.deltaVMps * 100).toFixed(2)} cm/s</em>
-              <strong>{point.propellantGrams.toFixed(1)} g</strong>
+              <strong>{point.propellantGrams.toFixed(1)} g{point.withinTestedRange ? '' : ' *'}</strong>
             </div>)}
+            {costCurve.some((point) => !point.withinTestedRange) && <p className="ops-cost-note">* Beyond the {(MAX_ADVISORY_DELTA_V_MPS * 100).toFixed(0)} cm/s advisory cap, so the study will not raise it as a candidate.</p>}
             <p>Minimum impulse that reaches the separation goal at each decision time, solved in closed form on the same linearized geometry. Propellant uses the example profile above.</p>
           </div></details>
         </>}
@@ -420,6 +421,10 @@ export default function OperationsWorkspace() {
 
   const threatsById = useMemo(() => new Map((threats?.objects ?? []).map((threat) => [threat.catalogId, threat])), [threats]);
   const monitoredIdSet = useMemo(() => new Set(monitoredIds), [monitoredIds]);
+  const screenedIdSet = useMemo(
+    () => new Set(conjunctions?.screenedCatalogIds ?? []),
+    [conjunctions],
+  );
   const triageMinute = Math.floor(clock / 60_000) * 60_000;
   const rankedEvents = useMemo(() => [...(conjunctions?.events ?? [])]
     .filter((event) => eventTouchesMonitoringList(event, monitoredIdSet))
@@ -755,7 +760,7 @@ export default function OperationsWorkspace() {
         <div className="ops-fleet-list">
           {monitoredFleetObjects.map((satellite) => {
             const event = eventForSatellite(rankedEvents, satellite.catalogId);
-            const state = monitoredState(event, defaultFleetIds.includes(satellite.catalogId));
+            const state = monitoredState(event, screenedIdSet.has(satellite.catalogId));
             return <div key={satellite.catalogId} className={selectedSatelliteId === satellite.catalogId ? 'selected' : ''}>
               <button className="ops-fleet-select" onClick={() => selectObject(satellite.catalogId)}>
                 <span className="ops-sat-icon"><Satellite size={15} /></span>

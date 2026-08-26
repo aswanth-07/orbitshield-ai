@@ -5,7 +5,7 @@ import type { ConjunctionRecord, OmmRecord, OrbitPath } from './types';
 
 const STANDARD_GRAVITY = 9.80665;
 const SECONDS_PER_DAY = 86_400;
-const MAX_ADVISORY_DELTA_V_MPS = 0.25;
+export const MAX_ADVISORY_DELTA_V_MPS = 0.25;
 
 export type RtnAxis = 'R' | 'T' | 'N';
 export type ManeuverDirection = '+R' | '-R' | '+T' | '-T' | '+N' | '-N';
@@ -155,8 +155,6 @@ export function sampleSgp4AnchoredManeuverPath(
   if (points.length < 2) return null;
   return { catalogId: -4, name: 'SGP4-anchored lowest-fuel path', color, role: 'maneuver-study', points };
 }
-
-export const sampleManeuverPath = sampleSgp4AnchoredManeuverPath;
 
 export function propellantForImpulse(massKg: number, deltaVMps: number, specificImpulseSeconds: number) {
   if (!finitePositive(massKg) || !finitePositive(deltaVMps) || !finitePositive(specificImpulseSeconds)) return null;
@@ -310,13 +308,13 @@ export function buildManeuverStudy({
 }
 
 const COST_CURVE_LEAD_HOURS = [48, 36, 24, 18, 12, 6, 3];
-const COST_CURVE_MAX_DELTA_V_MPS = 5;
 
 export type LeadTimeCost = {
   leadHours: number;
   deltaVMps: number;
   propellantGrams: number;
   direction: ManeuverDirection;
+  /** False when the impulse exceeds the advisory cap the candidate ranking enforces. */
   withinTestedRange: boolean;
 };
 
@@ -384,7 +382,7 @@ export function leadTimeCostCurve({
       deltaVMps: best.deltaVMps,
       propellantGrams: propellantKg * 1_000,
       direction: best.direction,
-      withinTestedRange: best.deltaVMps <= COST_CURVE_MAX_DELTA_V_MPS,
+      withinTestedRange: best.deltaVMps <= MAX_ADVISORY_DELTA_V_MPS,
     });
   }
   return curve;

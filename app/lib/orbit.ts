@@ -57,15 +57,6 @@ export function propagateOmm(record: OmmRecord, date: Date): PropagatedObject | 
   return prepared ? propagatePreparedOmm(prepared, date) : null;
 }
 
-export function sampleOrbitPath(
-  record: OmmRecord,
-  center: Date,
-  color: string,
-  samples = 180,
-): OrbitPath {
-  return sampleClosedOrbitPath(record, center, color, samples);
-}
-
 /**
  * Samples one complete SGP4 ground track in the same Earth-fixed frame used by
  * the moving markers. The path is intentionally not forced closed: Earth

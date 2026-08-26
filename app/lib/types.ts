@@ -98,6 +98,12 @@ export type ConjunctionResponse = {
   sourceUpdatedAt: string | null;
   fetchedAt: string;
   run: SocratesRun;
+  /**
+   * Catalogue identifiers the screening run actually covered. An empty event
+   * list for a covered object means Clear. An object missing from this list was
+   * never screened, so its state is unknown rather than Clear.
+   */
+  screenedCatalogIds: number[];
   events: ConjunctionRecord[];
   message?: string;
 };

@@ -998,7 +998,11 @@ details li,
 .ops-cost-row .bar i { display: block; height: 100%; border-radius: 2px; background: linear-gradient(90deg,#50d9b3,#f4b85a); }
 .ops-cost-row em { color: #8fa1a7; font: 400 7px var(--font-geist-mono), monospace; font-style: normal; text-align: right; }
 .ops-cost-row strong { color: #e2ecec; font: 700 8px var(--font-geist-mono), monospace; text-align: right; }
+.ops-cost-row.beyond { border-color: rgba(244,184,90,.32); }
+.ops-cost-row.beyond strong { color: #f4b85a; }
+.ops-cost-row.beyond .bar i { background: linear-gradient(90deg,#f4b85a,#ff7983); }
 .ops-study-cost-curve p { margin-top: 5px; color: #5c6b71; font-size: 7px; line-height: 1.55; }
+.ops-study-cost-curve p.ops-cost-note { color: #b08a4a; }
 .ops-pc-gate { display: flex; align-items: flex-start; gap: 7px; margin-top: 8px; padding: 8px; border: 1px solid rgba(244,184,90,.28); border-radius: 5px; color: #f4b85a; background: rgba(244,184,90,.045); }
 .ops-pc-gate span { min-width: 0; }
 .ops-pc-gate strong, .ops-pc-gate small { display: block; }

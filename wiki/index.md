@@ -8,7 +8,7 @@ status: active
 
 OrbitShield is an offline-capable ML conjunction-review prototype
 for the Space Technology theme. The current build combines public CelesTrak
-screening, a persistent India Earth Observation fleet watch, SGP4 globe
+screening, a persistent Earth-observation mission fleet watch, SGP4 globe
 rendering, model-prioritized review alerts, accelerated satellite and debris
 encounters, an advisory manoeuvre trade study, and an ESA CDM model pipeline.
 

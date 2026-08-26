@@ -107,7 +107,15 @@ the current code actually uses. Blank SOCRATES numeric cells stay null and produ
 Needs data instead of becoming zero. Active queues and threat aggregates omit
 events whose TCA has passed.
 
-The six default satellites have known screening coverage in the bundled and
+`ConjunctionResponse.screenedCatalogIds` names the objects a screening run
+actually covered. The bundled run reports its own fleet list and the current run
+reports the configured watchlist, so an empty event list means Clear only for a
+covered object. A monitored satellite outside that list reports Connector needed
+instead of a false Clear. This invalidated `socrates-current-run` edge-cache
+entries, which carried no coverage list, so the key is now
+`socrates-current-run-v2`.
+
+The default satellites have known screening coverage in the bundled and
 current fleet feed. A judge can add any active payload to device-local storage
 for orbit monitoring. A custom payload shows Connector needed until a screening
 or CDM provider supplies conjunction coverage, so zero returned events never

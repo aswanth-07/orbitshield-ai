@@ -33,6 +33,7 @@ type SnapshotSocrates = {
   sourceUpdatedAt: string | null;
   fetchedAt: string;
   run: SocratesRun;
+  fleet: Array<{ catalogId: number; name: string }>;
   events: Array<Omit<ConjunctionRecord, 'id' | 'priority' | 'reasons' | 'flags'>>;
 };
 type SnapshotThreatCatalogue = {
@@ -252,6 +253,7 @@ function fallbackConjunctions(now = new Date()): ConjunctionResponse {
     sourceUpdatedAt: snapshot.sourceUpdatedAt,
     fetchedAt: snapshot.fetchedAt,
     run: snapshot.run,
+    screenedCatalogIds: snapshot.fleet.map((item) => item.catalogId),
     events,
     message: 'The latest prepared SOCRATES run is available for offline judging.',
   };
@@ -261,7 +263,7 @@ export async function getConjunctions(): Promise<ConjunctionResponse> {
   const now = Date.now();
   if (conjunctionCache && conjunctionCache.expiresAt > now) return conjunctionCache.value;
 
-  const edgeValue = await readEdgeCache<ConjunctionResponse>('socrates-current-run');
+  const edgeValue = await readEdgeCache<ConjunctionResponse>('socrates-current-run-v2');
   if (edgeValue) {
     const value = markEdgeCached(edgeValue);
     conjunctionCache = { value, expiresAt: now + SOCRATES_CYCLE };
@@ -291,10 +293,11 @@ export async function getConjunctions(): Promise<ConjunctionResponse> {
         currentAsOf: directory.FILE_MTIME ?? fallback.run.currentAsOf,
         conjunctionCount: Papa.parse(csv, { header: true, skipEmptyLines: true }).data.length,
       },
+      screenedCatalogIds: [...INDIA_EO_IDS],
       events,
     };
     conjunctionCache = { value, expiresAt: now + SOCRATES_CYCLE };
-    await writeEdgeCache('socrates-current-run', value, SOCRATES_CYCLE);
+    await writeEdgeCache('socrates-current-run-v2', value, SOCRATES_CYCLE);
     return value;
   } catch (error) {
     const value = fallbackConjunctions(new Date());
