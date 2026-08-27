@@ -2,6 +2,18 @@
   "name": "orbitshield-ai-prototype",
   "version": "0.1.0",
   "private": true,
+  "description": "Orbital conjunction monitoring, ML review prioritization, and advisory path studies in one interactive workspace.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aswanth-07/orbitshield-ai.git"
+  },
+  "keywords": [
+    "space-situational-awareness",
+    "satellite",
+    "sgp4",
+    "collision-avoidance",
+    "machine-learning"
+  ],
   "engines": {
     "node": ">=22.13.0"
   },
