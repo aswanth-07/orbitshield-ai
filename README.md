@@ -4,7 +4,7 @@
 
 Orbital conjunction monitoring, ML review prioritization, and advisory path studies in one interactive workspace.
 
-![OrbitShield AI monitoring workspace](docs/images/orbitshield-workspace.png)
+![OrbitShield AI globe-first landing workspace](docs/images/orbitshield-workspace.png)
 
 OrbitShield helps a small satellite team answer three questions quickly:
 
